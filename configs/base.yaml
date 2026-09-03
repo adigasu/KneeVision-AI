@@ -1,0 +1,53 @@
+project:
+  name: "rsna-knee-abnormality-detection"
+  seed: 42
+  output_dir: "./experiments"
+
+data:
+  data_dir: "../rsna-knee-abnormality-detection"
+  train_csv: "../rsna-knee-abnormality-detection/train.csv"
+  train_series_csv: "../rsna-knee-abnormality-detection/train_series.csv"
+  train_series_dir: "../rsna-knee-abnormality-detection/train_series"
+  test_csv: "../rsna-knee-abnormality-detection/test.csv"
+  test_series_csv: "../rsna-knee-abnormality-detection/test_series.csv"
+  test_series_dir: "../rsna-knee-abnormality-detection/test_series"
+  splits_csv: "./data/splits_5fold.csv"
+  
+  target_columns:
+    - "ACL"
+    - "MCL"
+    - "Medial Meniscus"
+    - "Lateral Meniscus"
+    - "Medial OA"
+    - "Lateral OA"
+    - "PF OA"
+    - "Effusion"
+    - "Synovitis"
+    - "Baker's"
+    - "Contusion"
+    - "Fracture"
+
+  num_slices_per_series: 24
+  image_size: [256, 256]
+  normalization: "minmax"
+  num_workers: 8
+
+model:
+  backbone: "convnext_small.fb_in22k_ft_in1k_384"
+  pretrained: true
+  in_channels: 1
+  num_classes: 12
+  mil_pooling: "attention" # 'attention', 'gated_attention', or 'mean'
+  dropout: 0.2
+
+training:
+  batch_size: 4
+  accumulate_grad_batches: 2
+  epochs: 15
+  learning_rate: 2.0e-4
+  min_lr: 1.0e-6
+  weight_decay: 1.0e-2
+  mixed_precision: "fp16" # 'fp16', 'bf16', or 'no'
+  loss: "bce_with_logits" # 'bce_with_logits', 'asymmetric', or 'focal'
+  scheduler: "cosine"
+  warmup_epochs: 1
