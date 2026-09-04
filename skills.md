@@ -5,61 +5,47 @@ skills through the RSNA Knee Abnormality Detection problem.
 
 ## AI / ML
 
-- [ ] Medical image preprocessing & DICOM
-- [ ] Multi-label classification
-- [ ] 2D / 2.5D / 3D modeling
-- [ ] Multiple Instance Learning
-- [ ] Multimodal learning
-- [ ] Vision-Language Models
-- [ ] Foundation-model adaptation
-- [ ] LoRA / PEFT
-- [ ] Knowledge distillation
+- [x] Medical image preprocessing & DICOM (3D spatial sorting along normal vector, VOI LUT windowing, 2.5D stacking)
+- [x] Multi-label classification (12 abnormality targets, Macro AUC formulation, Multilabel Stratified Splits)
+- [x] 2D / 2.5D / 3D modeling (Anisotropic resolution preservation, variable depth handling, VRAM optimization)
+- [x] Multiple Instance Learning (Gated Attention MIL pooling with masked padded collation)
+- [ ] Multimodal learning (Vision-Language Contrastive Alignment with Spanish radiology reports)
+- [ ] Vision-Language Models (BiomedCLIP / BETO / Clinical-Longformer adaptation)
+- [ ] Foundation-model adaptation (ConvNeXt-V2 / Swin / EVA-02 fine-tuning)
+- [ ] LoRA / PEFT (Low-Rank parameter efficient tuning for 58 labeled studies)
+- [ ] Knowledge distillation & Model ensemble
 
 ## Efficient AI
 
-- [ ] Mixed precision
-- [ ] Quantization
-- [ ] Model compression
-- [ ] Inference optimization
-- [ ] Accuracy–latency trade-offs
+- [x] High-throughput data preprocessing (89 series/sec multi-process extraction)
+- [x] Memory-efficient caching (uint8 2.5D tensors with 4x disk/RAM savings)
+- [x] Columnar storage (Snappy-compressed Parquet with strict type safety)
+- [ ] Mixed precision (AMP FP16 / BF16 training)
+- [ ] Torch.compile & FlashAttention optimization
+- [ ] Model quantization (INT8 / FP8 inference)
+- [ ] Accuracy–latency trade-offs for Kaggle deployment
 
 ## Evaluation
 
-- [ ] Macro ROC-AUC
-- [ ] Per-class evaluation
-- [ ] Ablation studies
-- [ ] Error analysis
-- [ ] Calibration
-- [ ] Robustness
+- [x] Macro ROC-AUC (RSNA competition metric with NaN-masked target evaluation)
+- [x] Per-class evaluation (12 abnormality breakdown & positive prevalence benchmarking)
+- [ ] Cross-plane ablation studies (Sagittal vs Coronal vs Axial vs Tri-planar)
+- [ ] Error analysis on false positives / false negatives
+- [ ] Probability calibration & temperature scaling
 
 ## ML Engineering
 
-- [ ] Reproducible training
-- [ ] Configuration-driven experiments
-- [ ] Experiment tracking
-- [ ] Efficient data pipelines
-- [ ] Model serialization
-- [ ] Inference pipeline
-- [ ] Kaggle deployment
+- [x] Leak-free cross-validation (5-fold Multilabel Stratified Split on patient studies)
+- [x] Configuration-driven data pipeline (Flexible image resolutions & slice depths)
+- [x] High-performance PyTorch DataLoader (Zero-copy memory mapping & custom MIL collate)
+- [x] Modular test suite (Pytest integration for datasets, transforms, metrics, and preprocessing)
+- [ ] Experiment tracking (W&B / MLflow integration)
+- [ ] Model checkpointing & serialization
+- [ ] Kaggle submission & inference kernel packaging
 
-## Research Skills
+## Research & Documentation
 
-- [ ] Hypothesis-driven experimentation
-- [ ] Controlled experiments
-- [ ] Ablation studies
-- [ ] Failure analysis
-- [ ] Technical documentation
-- [ ] Reproducibility
-
-## Transferable Capabilities
-
-The goal is to develop capabilities that can later be reused beyond medical
-imaging:
-
-- Multimodal AI
-- Foundation models
-- Efficient AI
-- Model evaluation
-- AI systems
-- Research methodology
-- Production-oriented ML
+- [x] Comprehensive exploratory data analysis (EDA notebooks & publication figures)
+- [x] Technical architecture guide (2.5D vs 3D mathematical & clinical justification)
+- [x] Systematic progress walkthroughs & milestone artifacts
+- [ ] Hypothesis-driven experimentation logs
