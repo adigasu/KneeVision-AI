@@ -19,9 +19,9 @@ def get_training_transforms(image_size: Union[int, Tuple[int, int]] = (256, 256)
     return A.Compose([
         A.Resize(h, w),
         A.HorizontalFlip(p=0.5),
-        A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, border_mode=0, p=0.6),
+        A.Affine(scale=(0.9, 1.1), rotate=(-15, 15), translate_percent=(-0.06, 0.06), p=0.6),
         A.RandomBrightnessContrast(brightness_limit=0.15, contrast_limit=0.15, p=0.5),
-        A.CoarseDropout(max_holes=6, max_height=24, max_width=24, min_holes=1, fill_value=0, p=0.3),
+        A.CoarseDropout(num_holes_range=(1, 6), hole_height_range=(8, 24), hole_width_range=(8, 24), fill=0, p=0.3),
         ToTensorV2(),
     ])
 
