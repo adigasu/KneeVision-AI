@@ -116,6 +116,19 @@ KneeVision-AI/
 
 ---
 
+
+---
+
+## 🏆 5-Fold Cross-Validation Leaderboard
+
+Cross-validation performance is tracked in [](docs/experimentation_log.md).
+
+| Experiment | Architecture | Modality / Input | Pretraining | Loss Function | **Mean 5-Fold Macro AUC** | Status |
+|:---|:---|:---|:---|:---|:---:|:---:|
+| **EXP-001** |  + Gated MIL | 2.5D Sagittal Slices | ImageNet-1k | Asymmetric Loss (ASL) | **0.5600** | Completed |
+
+Detailed technical documentation and mathematical formulation are available in [](docs/phase_2_walkthrough.md).
+
 ## 🚀 Quickstart & Reproduction
 
 ### 1. Environment Setup

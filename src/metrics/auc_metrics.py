@@ -84,3 +84,16 @@ def compute_competition_metric(
 
     macro_auc = float(np.mean(valid_aucs)) if len(valid_aucs) > 0 else 0.5
     return macro_auc, per_class_auc
+
+
+def compute_macro_auc(
+    y_true: Union[np.ndarray, pd.DataFrame],
+    y_pred: Union[np.ndarray, pd.DataFrame],
+    target_columns: Optional[List[str]] = None,
+) -> Dict[str, Union[float, Dict[str, float]]]:
+    """Helper returning a structured dict with 'macro_auc' and 'per_class_auc'."""
+    macro_auc, per_class_auc = compute_competition_metric(y_true, y_pred, target_columns)
+    return {
+        "macro_auc": macro_auc,
+        "per_class_auc": per_class_auc,
+    }

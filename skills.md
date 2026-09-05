@@ -20,7 +20,7 @@ skills through the RSNA Knee Abnormality Detection problem.
 - [x] High-throughput data preprocessing (89 series/sec multi-process extraction)
 - [x] Memory-efficient caching (uint8 2.5D tensors with 4x disk/RAM savings)
 - [x] Columnar storage (Snappy-compressed Parquet with strict type safety)
-- [ ] Mixed precision (AMP FP16 / BF16 training)
+- [x] Mixed precision (AMP FP16 training with GradScaler)
 - [ ] Torch.compile & FlashAttention optimization
 - [ ] Model quantization (INT8 / FP8 inference)
 - [ ] Accuracy–latency trade-offs for Kaggle deployment
@@ -40,7 +40,7 @@ skills through the RSNA Knee Abnormality Detection problem.
 - [x] High-performance PyTorch DataLoader (Zero-copy memory mapping & custom MIL collate)
 - [x] Modular test suite (Pytest integration for datasets, transforms, metrics, and preprocessing)
 - [ ] Experiment tracking (W&B / MLflow integration)
-- [ ] Model checkpointing & serialization
+- [x] Model checkpointing & serialization (Best Macro AUC weight saving)
 - [ ] Kaggle submission & inference kernel packaging
 
 ## Research & Documentation
@@ -48,4 +48,4 @@ skills through the RSNA Knee Abnormality Detection problem.
 - [x] Comprehensive exploratory data analysis (EDA notebooks & publication figures)
 - [x] Technical architecture guide (2.5D vs 3D mathematical & clinical justification)
 - [x] Systematic progress walkthroughs & milestone artifacts
-- [ ] Hypothesis-driven experimentation logs
+- [x] Hypothesis-driven experimentation logs (Centralized experiment leaderboard in docs/experimentation_log.md)
