@@ -56,37 +56,38 @@ class GatedAttentionMILPool(nn.Module):
 
 class KneeMILModel(nn.Module):
     """
-    Complete 2.5D Knee MRI MIL Architecture with Gradient Checkpointing.
+    Complete 2.5D Knee MRI MIL Architecture with Memory-Efficient Slice Chunking.
     Ingests variable 2.5D slice volumes, pools inter-slice features with Gated Attention,
     and outputs 12 abnormality target logits.
     """
 
     def __init__(
         self,
-        backbone_name: str = "convnext_tiny",
+        backbone_name: str = 'convnext_tiny',
         pretrained: bool = True,
         num_classes: int = 12,
         mil_hidden_dim: int = 128,
         dropout: float = 0.3,
         in_chans: int = 3,
-        use_grad_checkpointing: bool = True,
+        chunk_size: int = 32,
     ):
         super().__init__()
         self.backbone_name = backbone_name
         self.num_classes = num_classes
+        self.chunk_size = chunk_size
 
-        # 1. 2D Slice Feature Extractor
+        # 1. 2D Slice Feature Extractor (Supports CNNs, ConvNeXt, and DINOv2 ViTs)
+        extra_kwargs = {}
+        if 'dinov2' in backbone_name.lower():
+            extra_kwargs = {'img_size': 252, 'dynamic_img_size': True}
+
         self.backbone = timm.create_model(
             backbone_name,
             pretrained=pretrained,
             num_classes=0,
             in_chans=in_chans,
+            **extra_kwargs,
         )
-        if use_grad_checkpointing and hasattr(self.backbone, "set_grad_checkpointing"):
-            try:
-                self.backbone.set_grad_checkpointing(True)
-            except Exception:
-                pass
 
         self.num_features = self.backbone.num_features
 
@@ -106,11 +107,21 @@ class KneeMILModel(nn.Module):
 
     def extract_slice_features(self, images: torch.Tensor) -> torch.Tensor:
         """
-        Extracts features per study to preserve memory.
+        Extracts features per slice with memory-efficient chunking.
         """
         B, D, C, H, W = images.shape
         x_flat = images.view(B * D, C, H, W)
-        feats_flat = self.backbone(x_flat)
+        total = B * D
+
+        if total <= self.chunk_size:
+            feats_flat = self.backbone(x_flat)
+        else:
+            feats_list = []
+            for i in range(0, total, self.chunk_size):
+                chunk = x_flat[i : i + self.chunk_size]
+                feats_list.append(self.backbone(chunk))
+            feats_flat = torch.cat(feats_list, dim=0)
+
         return feats_flat.view(B, D, self.num_features)
 
     def forward(
@@ -118,23 +129,12 @@ class KneeMILModel(nn.Module):
         images: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
-        """
-        Args:
-            images: Tensor of shape (Batch, Max_Depth, 3, Height, Width).
-            mask: Boolean tensor of shape (Batch, Max_Depth), True for valid slices.
-
-        Returns:
-            dict containing:
-                'logits': Tensor of shape (Batch, 12)
-                'attention_weights': Tensor of shape (Batch, Max_Depth)
-                'study_embedding': Tensor of shape (Batch, Num_Features)
-        """
         slice_feats = self.extract_slice_features(images)  # (B, D, Feat_Dim)
         study_embed, attn_weights = self.mil_pool(slice_feats, mask=mask)
         logits = self.classifier(study_embed)
 
         return {
-            "logits": logits,
-            "attention_weights": attn_weights,
-            "study_embedding": study_embed,
+            'logits': logits,
+            'attention_weights': attn_weights,
+            'study_embedding': study_embed,
         }

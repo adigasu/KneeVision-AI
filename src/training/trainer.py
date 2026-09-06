@@ -1,7 +1,7 @@
 """
 RSNA Knee Abnormality Detection - Enterprise PyTorch Model Trainer.
-Features Automatic Mixed Precision (FP16 AMP), Gradient Scaling, Model EMA,
-Cosine Annealing with Warmup, and Competition Macro AUC-ROC Checkpointing.
+Features Automatic Mixed Precision (FP16 AMP), Gradient Accumulation, Gradient Scaling,
+Model EMA, Cosine Annealing with Warmup, and Competition Macro AUC-ROC Checkpointing.
 """
 
 import os
@@ -37,7 +37,7 @@ class ModelEMA:
 
 class KneeTrainer:
     """
-    Production-Grade Trainer for 2.5D MIL Knee Abnormality Models.
+    Production-Grade Trainer for 2.5D MIL Knee Abnormality Models with Gradient Accumulation.
     """
 
     def __init__(
@@ -51,6 +51,7 @@ class KneeTrainer:
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         use_amp: bool = True,
         use_ema: bool = True,
+        grad_accum_steps: int = 1,
         max_grad_norm: float = 2.0,
         checkpoint_dir: str = "checkpoints",
         experiment_name: str = "mil_baseline",
@@ -64,6 +65,7 @@ class KneeTrainer:
         self.device = device
         self.use_amp = use_amp and (device == "cuda")
         self.scaler = torch.amp.GradScaler("cuda", enabled=self.use_amp)
+        self.grad_accum_steps = max(1, grad_accum_steps)
         self.max_grad_norm = max_grad_norm
         self.checkpoint_dir = checkpoint_dir
         self.experiment_name = experiment_name
@@ -78,30 +80,33 @@ class KneeTrainer:
         self.model.train()
         total_loss = 0.0
         num_batches = len(self.train_loader)
+        self.optimizer.zero_grad()
 
         pbar = tqdm(self.train_loader, desc=f"Epoch {epoch:02d} [Train]", leave=False)
-        for batch in pbar:
+        for step, batch in enumerate(pbar):
             images = batch["images"].to(self.device, non_blocking=True)
             mask = batch["mask"].to(self.device, non_blocking=True)
             targets = batch["targets"].to(self.device, non_blocking=True)
-
-            self.optimizer.zero_grad()
 
             with torch.amp.autocast("cuda", enabled=self.use_amp):
                 outputs = self.model(images, mask=mask)
                 logits = outputs["logits"]
                 loss = self.criterion(logits, targets)
+                scaled_loss = loss / self.grad_accum_steps
 
-            self.scaler.scale(loss).backward()
-            if self.max_grad_norm > 0:
-                self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+            self.scaler.scale(scaled_loss).backward()
 
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
+            if (step + 1) % self.grad_accum_steps == 0 or (step + 1) == num_batches:
+                if self.max_grad_norm > 0:
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
 
-            if self.ema is not None:
-                self.ema.update(self.model)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                self.optimizer.zero_grad()
+
+                if self.ema is not None:
+                    self.ema.update(self.model)
 
             total_loss += loss.item()
             pbar.set_postfix({"Loss": f"{loss.item():.4f}"})
@@ -138,7 +143,6 @@ class KneeTrainer:
         y_pred = np.vstack(all_preds)
         y_true = np.vstack(all_targets)
 
-        # Compute Competition Macro AUC-ROC
         auc_res = compute_macro_auc(y_true, y_pred)
         auc_res["val_loss"] = total_val_loss / max(1, num_batches)
         auc_res["y_pred"] = y_pred
@@ -148,7 +152,7 @@ class KneeTrainer:
 
     def fit(self, num_epochs: int = 15, fold: int = 0) -> Dict[str, Any]:
         self.console.print(f"\n[bold green]=== Starting Training: {self.experiment_name} (Fold {fold}) ===[/bold green]")
-        self.console.print(f"Device: [cyan]{self.device}[/cyan] | AMP FP16: [cyan]{self.use_amp}[/cyan] | Epochs: [cyan]{num_epochs}[/cyan]")
+        self.console.print(f"Device: [cyan]{self.device}[/cyan] | AMP FP16: [cyan]{self.use_amp}[/cyan] | Accum Steps: [cyan]{self.grad_accum_steps}[/cyan] | Epochs: [cyan]{num_epochs}[/cyan]")
 
         history = []
 
@@ -173,7 +177,6 @@ class KneeTrainer:
             if is_best:
                 self.best_macro_auc = macro_auc
                 self.best_epoch = epoch
-                # Save best checkpoint
                 ckpt_path = os.path.join(self.checkpoint_dir, f"{self.experiment_name}_fold{fold}_best.pth")
                 save_model = self.ema.module if self.ema is not None else self.model
                 torch.save({

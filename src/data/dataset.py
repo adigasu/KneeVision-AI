@@ -150,13 +150,9 @@ class KneeMRIDataset(Dataset):
         # Relative depths array p_z in [0, 1]
         relative_depths = torch.tensor(np.linspace(0.0, 1.0, num_slices, dtype=np.float32))
 
-        # Extract 12 target binary labels
-        target_cols_present = [col for col in TARGET_COLUMNS if col in row and pd.notnull(row[col])]
-        if len(target_cols_present) == len(TARGET_COLUMNS):
-            target_vals = row[TARGET_COLUMNS].values.astype(np.float32)
-            targets = torch.tensor(target_vals, dtype=torch.float32)
-        else:
-            targets = torch.full((len(TARGET_COLUMNS),), float("nan"), dtype=torch.float32)
+        # Extract 12 target labels (individual +1.0, 0.0, and NaN per target)
+        target_vals = [float(row[col]) if (col in row and pd.notnull(row[col])) else float("nan") for col in TARGET_COLUMNS]
+        targets = torch.tensor(target_vals, dtype=torch.float32)
 
         return {
             "study_uid": study_uid,

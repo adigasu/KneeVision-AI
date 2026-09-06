@@ -38,7 +38,7 @@ class AsymmetricLoss(nn.Module):
         # Create mask for valid (non-NaN) targets
         valid_mask = ~torch.isnan(targets)
         if not valid_mask.any():
-            return torch.tensor(0.0, device=logits.device, requires_grad=True)
+            return (logits * 0.0).sum()
 
         # Replace NaNs with 0 temporarily for calculation, will mask out later
         clean_targets = torch.where(valid_mask, targets, torch.zeros_like(targets))
@@ -87,7 +87,7 @@ class MaskedBCEWithLogitsLoss(nn.Module):
     def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         valid_mask = ~torch.isnan(targets)
         if not valid_mask.any():
-            return torch.tensor(0.0, device=logits.device, requires_grad=True)
+            return (logits * 0.0).sum()
 
         clean_targets = torch.where(valid_mask, targets, torch.zeros_like(targets))
         bce = F.binary_cross_entropy_with_logits(
