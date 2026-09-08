@@ -120,13 +120,25 @@ class TriPlanarKneeModel(nn.Module):
         images: torch.Tensor,
         pooler: GatedAttentionMILPool,
         mask: Optional[torch.Tensor] = None,
+        chunk_size: int = 32,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Encodes a batch of plane series: (B, D, 3, H, W) -> (B, Num_Features)
+        Encodes a batch of plane series: (B, D, 3, H, W) -> (B, Num_Features) with memory-safe slice chunking.
         """
         B, D, C, H, W = images.shape
         x_flat = images.view(B * D, C, H, W)
-        slice_feats = self.backbone(x_flat).view(B, D, self.num_features)
+        total = B * D
+
+        if total <= chunk_size:
+            feats_flat = self.backbone(x_flat)
+        else:
+            feats_list = []
+            for i in range(0, total, chunk_size):
+                chunk = x_flat[i : i + chunk_size]
+                feats_list.append(self.backbone(chunk))
+            feats_flat = torch.cat(feats_list, dim=0)
+
+        slice_feats = feats_flat.view(B, D, self.num_features)
         plane_embed, attn_w = pooler(slice_feats, mask=mask)
         return plane_embed, attn_w
 
