@@ -95,3 +95,27 @@ class MaskedBCEWithLogitsLoss(nn.Module):
         )
         masked_bce = bce * valid_mask.float()
         return masked_bce.sum() / valid_mask.float().sum().clamp(min=1.0)
+
+
+class ConfidenceWeightedBCEWithLogitsLoss(nn.Module):
+    """
+    Confidence-Weighted Soft Binary Cross-Entropy Loss for LLM-derived soft targets.
+    Loss weight is 2 * |p - 0.5|:
+    - When p in {0.0, 1.0} -> weight = 1.0 (Full confidence)
+    - When p = 0.50 -> weight = 0.0 (Zeroes out unaddressed findings)
+    """
+
+    def __init__(self, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        # Confidence weight: 2 * |p - 0.5|
+        weights = 2.0 * torch.abs(targets - 0.5)
+
+        # Soft BCE with logits
+        bce = F.binary_cross_entropy_with_logits(logits, targets, reduction="none")
+
+        # Weighted loss normalized strictly over confident evidence
+        weighted_loss = weights * bce
+        return weighted_loss.sum() / (weights.sum() + self.eps)
