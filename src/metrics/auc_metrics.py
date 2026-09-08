@@ -1,6 +1,7 @@
 """
 RSNA Knee Abnormality Detection - Evaluation Metrics
 Exact Macro ROC-AUC evaluation across all 12 target classes.
+Supports binary ground truth as well as continuous soft label validation.
 """
 
 from typing import Dict, List, Optional, Tuple, Union
@@ -29,14 +30,16 @@ def compute_competition_metric(
     y_true: Union[np.ndarray, pd.DataFrame],
     y_pred: Union[np.ndarray, pd.DataFrame],
     target_columns: Optional[List[str]] = None,
+    binarize_continuous_threshold: float = 0.5,
 ) -> Tuple[float, Dict[str, float]]:
     """
     Computes the Kaggle competition evaluation metric: Macro-Averaged AUC-ROC across 12 targets.
 
     Args:
-        y_true: Ground truth binary labels of shape (N, 12). Can contain NaNs (unlabeled instances).
+        y_true: Ground truth binary labels of shape (N, 12) or continuous soft labels [0.0, 1.0].
         y_pred: Predicted probability scores of shape (N, 12) between [0.0, 1.0].
         target_columns: Optional list of target column names. Defaults to TARGET_COLUMNS.
+        binarize_continuous_threshold: Threshold to convert soft pseudo-labels for ROC-AUC computation.
 
     Returns:
         macro_auc: Average AUC across all evaluable target classes (float).
@@ -64,19 +67,28 @@ def compute_competition_metric(
         true_col = y_true[:, i]
         pred_col = y_pred[:, i]
 
-        # Filter out NaN / missing values (for partially labeled training sets)
+        # Filter out NaN / missing values
         valid_mask = ~np.isnan(true_col)
         valid_true = true_col[valid_mask]
         valid_pred = pred_col[valid_mask]
 
-        # AUC is only well-defined if both positive and negative samples exist in ground truth
-        unique_classes = np.unique(valid_true)
-        if len(unique_classes) < 2:
+        if len(valid_true) == 0:
+            per_class_auc[col_name] = np.nan
+            continue
+
+        # If continuous labels (e.g. from soft pseudo-labels), binarize for ROC-AUC
+        unique_vals = np.unique(valid_true)
+        if len(unique_vals) > 2:
+            eval_true = (valid_true >= binarize_continuous_threshold).astype(int)
+        else:
+            eval_true = valid_true.astype(int)
+
+        if len(np.unique(eval_true)) < 2:
             per_class_auc[col_name] = np.nan
             continue
 
         try:
-            score = float(roc_auc_score(valid_true, valid_pred))
+            score = float(roc_auc_score(eval_true, valid_pred))
             per_class_auc[col_name] = score
             valid_aucs.append(score)
         except ValueError:
