@@ -36,6 +36,15 @@ $$\text{Macro AUC} = \frac{1}{12} \sum_{c=1}^{12} \text{AUC}_c$$
 
 ---
 
+## 🌐 Multilingual Label Quality & Tri-State Strategy
+
+A comprehensive analysis of the 4,407 radiology reports reveals:
+- **Multilingual distribution**: 85.3% Spanish/English, 7.3% Greek (321 reports), 5.0% Cyrillic (220 reports).
+- **Enrichment bias**: The 58 gold studies average 4.14 findings/study (0 normal studies).
+- **Tri-State Labeling**: Explicitly positive (), explicitly normal (), and unmentioned ( masked) to eliminate false negative gradients.
+
+See the complete technical strategy in [](docs/label_quality_and_multilingual_strategy.md).
+
 ## 🏗️ System Architecture & 2.5D MIL Design
 
 ```
@@ -126,6 +135,7 @@ Cross-validation performance is tracked in [](docs/experimentation_log.md).
 | Experiment | Architecture | Modality / Input | Pretraining | Loss Function | **Mean 5-Fold Macro AUC** | Status |
 |:---|:---|:---|:---|:---|:---:|:---:|
 | **EXP-001** |  + Gated MIL | 2.5D Sagittal Slices | ImageNet-1k | Asymmetric Loss (ASL) | **0.5600** | Completed |
+| **EXP-002** |  + Gated MIL | 2.5D Sagittal Slices | Weak Multimodal (BETO InfoNCE) | Asymmetric Loss (ASL) | **0.5252** | Completed |
 
 Detailed technical documentation and mathematical formulation are available in [](docs/phase_2_walkthrough.md).
 
