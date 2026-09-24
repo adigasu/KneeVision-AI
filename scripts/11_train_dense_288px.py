@@ -169,15 +169,42 @@ def train_single_fold_dense(
         else:
             head_params.append(param)
 
+    # ── Learning rates (differential or default) ────────────────────────────
+    backbone_lr = args.backbone_lr if args.backbone_lr is not None else args.lr * 0.2
+    head_lr     = args.head_lr     if args.head_lr     is not None else args.lr
+
     optimizer = torch.optim.AdamW(
         [
-            {"params": backbone_params, "lr": args.lr * 0.2, "weight_decay": args.weight_decay},
-            {"params": head_params, "lr": args.lr, "weight_decay": args.weight_decay},
+            {"params": backbone_params, "lr": backbone_lr, "weight_decay": args.weight_decay},
+            {"params": head_params,    "lr": head_lr,     "weight_decay": args.weight_decay},
         ]
     )
 
+    # ── Resume from checkpoint ───────────────────────────────────────────────
+    start_epoch = 1
+    if getattr(args, 'resume', None) and os.path.exists(args.resume):
+        console.print(f"[yellow]Resuming from checkpoint: {args.resume}[/yellow]")
+        resume_ckpt = torch.load(args.resume, map_location=device)
+        model.load_state_dict(resume_ckpt["model_state_dict"])
+        start_epoch = resume_ckpt.get("epoch", 0) + 1
+        console.print(f"  Resumed at epoch {start_epoch - 1} → continuing from epoch {start_epoch}")
+
     total_steps = len(train_loader) * args.epochs // args.grad_accum_steps
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, total_steps), eta_min=args.lr * 0.01)
+    warmup_steps = len(train_loader) * getattr(args, 'warmup_epochs', 0) // args.grad_accum_steps
+
+    def _lr_lambda(current_step: int):
+        """Linear warmup then cosine decay."""
+        if warmup_steps > 0 and current_step < warmup_steps:
+            return float(current_step) / float(max(1, warmup_steps))
+        progress = float(current_step - warmup_steps) / float(max(1, total_steps - warmup_steps))
+        return max(0.01, 0.5 * (1.0 + __import__('math').cos(__import__('math').pi * progress)))
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=_lr_lambda)
+    # Fast-forward scheduler if resuming
+    if start_epoch > 1:
+        steps_done = len(train_loader) * (start_epoch - 1) // args.grad_accum_steps
+        for _ in range(steps_done):
+            scheduler.step()
     scaler = torch.amp.GradScaler("cuda", enabled=args.amp)
 
     best_val_auc = 0.0
@@ -188,7 +215,7 @@ def train_single_fold_dense(
     )
     os.makedirs(args.checkpoint_dir, exist_ok=True)
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(start_epoch, args.epochs + 1):
         model.train()
         running_loss = 0.0
         step_count = 0
@@ -300,6 +327,18 @@ def run_dense_training():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--dry_run", action="store_true", default=False)
+    parser.add_argument("--resume", type=str, default=None,
+                        help="Path to checkpoint to resume training from")
+    parser.add_argument("--warmup_epochs", type=int, default=0,
+                        help="Linear LR warmup epochs before cosine annealing")
+    parser.add_argument("--backbone_lr", type=float, default=None,
+                        help="Override backbone LR (default: lr * 0.2)")
+    parser.add_argument("--head_lr", type=float, default=None,
+                        help="Override head LR (default: lr)")
+    parser.add_argument("--use_tta", action="store_true", default=False,
+                        help="Enable horizontal-flip TTA during validation")
+    parser.add_argument("--checkpoint_prefix", type=str, default=None,
+                        help="Override checkpoint filename prefix")
     args = parser.parse_args()
 
     seed_everything(args.seed)
