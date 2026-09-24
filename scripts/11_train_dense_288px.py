@@ -329,7 +329,7 @@ def run_dense_training():
     parser.add_argument("--dry_run", action="store_true", default=False)
     parser.add_argument("--resume", type=str, default=None,
                         help="Path to checkpoint to resume training from")
-    parser.add_argument("--warmup_epochs", type=int, default=0,
+    parser.add_argument("--warmup_epochs", type=int, default=2,
                         help="Linear LR warmup epochs before cosine annealing")
     parser.add_argument("--backbone_lr", type=float, default=None,
                         help="Override backbone LR (default: lr * 0.2)")

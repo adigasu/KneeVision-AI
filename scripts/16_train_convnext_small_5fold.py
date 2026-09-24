@@ -54,7 +54,9 @@ def parse_args():
 
 def main():
     args     = parse_args()
-    ckpt_dir = resolve_checkpoint_dir()
+    from src.config import get_experiment_artifacts
+    exp_art = get_experiment_artifacts("phase_07_convnext_small_50m")
+    ckpt_dir = exp_art["checkpoints"]
 
     print(f"\n{'='*60}")
     print(f"KneeVision-AI: ConvNeXt-Small 5-Fold Training (Phase C)")
@@ -88,7 +90,7 @@ def main():
             "--head_lr",       str(args.head_lr),
             "--warmup_epochs", str(args.warmup_epochs),
             "--labels_path",   args.label_file,
-            "--checkpoint_prefix", "phase_c_convnext_small",
+            "--checkpoint_dir", str(ckpt_dir),
         ]
 
         print(f"  CMD: {' '.join(cmd)}\n")
