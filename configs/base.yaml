@@ -51,3 +51,10 @@ training:
   loss: "bce_with_logits" # 'bce_with_logits', 'asymmetric', or 'focal'
   scheduler: "cosine"
   warmup_epochs: 1
+
+artifacts:
+  root_dir: "./artifacts"
+  experiments_dir: "./artifacts/experiments"
+  figures_dir: "./artifacts/figures"
+  logs_dir: "./artifacts/logs"
+  reports_dir: "./artifacts/reports"

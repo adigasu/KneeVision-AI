@@ -22,7 +22,7 @@ for cand in [
     '../Datasets/rsna-knee-abnormality-detection',
     '../../Datasets/rsna-knee-abnormality-detection',
     os.path.expanduser('~/net/Datasets/rsna-knee-abnormality-detection'),
-    '/home/AQ44130/net/Datasets/rsna-knee-abnormality-detection'
+    os.path.expanduser('~/net/Datasets/rsna-knee-abnormality-detection')
 ]:
     if os.path.exists(cand):
         DATA_DIR = os.path.abspath(cand)
