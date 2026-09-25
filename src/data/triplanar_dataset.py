@@ -130,10 +130,13 @@ class TriPlanarKneeDataset(Dataset):
 
         targets = torch.tensor(target_vals, dtype=torch.float32)
 
+        is_gold = bool(row["is_gold"]) if "is_gold" in row and pd.notnull(row["is_gold"]) else False
+
         return {
             "study_uid": study_uid,
             "sagittal": sag_tensor,
             "coronal": cor_tensor,
             "axial": ax_tensor,
             "targets": targets,
+            "is_gold": is_gold,
         }
