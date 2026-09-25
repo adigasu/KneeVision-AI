@@ -57,7 +57,7 @@ def run_pretraining():
     parser.add_argument("--weight_decay", type=float, default=1e-2)
     parser.add_argument("--lambda_pseudo", type=float, default=1.0)
     parser.add_argument("--embed_dim", type=int, default=256)
-    parser.add_argument("--num_workers", type=int, default=4)
+    parser.add_argument("--num_workers", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 

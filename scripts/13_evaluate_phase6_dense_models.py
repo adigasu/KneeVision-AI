@@ -80,7 +80,7 @@ def evaluate_backbone_oof(
             val_dataset,
             batch_size=16,
             shuffle=False,
-            num_workers=4,
+            num_workers=8,
             collate_fn=mil_padded_collate,
         )
 

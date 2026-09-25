@@ -322,7 +322,7 @@ def run_dense_training():
     parser.add_argument("--weight_decay", type=float, default=1e-2)
     parser.add_argument("--mil_hidden_dim", type=int, default=128)
     parser.add_argument("--dropout", type=float, default=0.25)
-    parser.add_argument("--num_workers", type=int, default=6)
+    parser.add_argument("--num_workers", type=int, default=8)
     parser.add_argument("--amp", action="store_true", default=True)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default=None)

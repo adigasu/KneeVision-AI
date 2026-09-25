@@ -248,7 +248,7 @@ def run_triplanar_cv():
     parser.add_argument("--mil_hidden_dim", type=int, default=128)
     parser.add_argument("--num_heads", type=int, default=8)
     parser.add_argument("--dropout", type=float, default=0.3)
-    parser.add_argument("--num_workers", type=int, default=4)
+    parser.add_argument("--num_workers", type=int, default=8)
     parser.add_argument("--ema", action="store_true", default=True)
     parser.add_argument("--gold_only", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=42)

@@ -57,7 +57,7 @@ def get_oof_predictions_mil(backbone_name: str, exp_prefix: str, df_master: pd.D
             val_ds,
             batch_size=8,
             shuffle=False,
-            num_workers=4,
+            num_workers=8,
             collate_fn=lambda b: {
                 "images": torch.stack([item["images"] for item in b]),
                 "targets": torch.stack([item["targets"] for item in b]),
@@ -121,7 +121,7 @@ def get_oof_predictions_triplanar(exp_prefix: str, df_master: pd.DataFrame, df_i
             val_ds,
             batch_size=4,
             shuffle=False,
-            num_workers=4,
+            num_workers=8,
             collate_fn=lambda b: {
                 "sag": torch.stack([item["sagittal"] for item in b]),
                 "cor": torch.stack([item["coronal"] for item in b]),

@@ -271,7 +271,7 @@ def run_5fold_training():
     parser.add_argument("--gamma_pos", type=float, default=0.0)
     parser.add_argument("--mil_hidden_dim", type=int, default=128)
     parser.add_argument("--dropout", type=float, default=0.3)
-    parser.add_argument("--num_workers", type=int, default=6)
+    parser.add_argument("--num_workers", type=int, default=8)
     parser.add_argument("--amp", action="store_true", default=True)
     parser.add_argument("--ema", action="store_true", default=True)
     parser.add_argument("--seed", type=int, default=42)
