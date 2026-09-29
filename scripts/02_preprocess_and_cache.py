@@ -149,9 +149,14 @@ def run_preprocessing(
 
 
 if __name__ == "__main__":
+    from src.config import resolve_data_dir, resolve_cache_dir
+
+    default_data_dir = str(resolve_data_dir()) if hasattr(resolve_data_dir, "__call__") else "../Datasets/rsna-knee-abnormality-detection"
+    default_cache_dir = str(resolve_cache_dir()) if hasattr(resolve_cache_dir, "__call__") else "./data/cached_series_384"
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", type=str, default="../Datasets/rsna-knee-abnormality-detection")
-    parser.add_argument("--output_dir", type=str, default="./data/preprocessed_256")
+    parser.add_argument("--data_dir", type=str, default=default_data_dir, help="RSNA Knee dataset directory (default: from config)")
+    parser.add_argument("--output_dir", type=str, default=default_cache_dir, help="Output cache directory (default: from config)")
     parser.add_argument("--target_size", type=int, default=256)
     parser.add_argument("--labeled_only", action="store_true", help="Process only the 58 labeled studies")
     parser.add_argument("--max_studies", type=int, default=None)

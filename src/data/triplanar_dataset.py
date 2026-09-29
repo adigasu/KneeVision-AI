@@ -27,13 +27,33 @@ class TriPlanarKneeDataset(Dataset):
     def __init__(
         self,
         df: Union[pd.DataFrame, str],
-        cache_dir: str = "./data/preprocessed_256",
+        cache_dir: Optional[str] = None,
         series_df: Optional[Union[pd.DataFrame, str]] = None,
         target_slices: int = 24,
         transforms: Optional[Callable] = None,
         is_training: bool = False,
     ):
         self.df = load_dataframe_auto(df)
+        if cache_dir is None:
+            try:
+                from src.config import resolve_cache_dir
+                cache_dir = str(resolve_cache_dir())
+            except Exception:
+                cache_dir = "./data/cached_series_384"
+
+        if not os.path.exists(cache_dir):
+            fallback_256 = os.path.join(os.path.dirname(cache_dir), "preprocessed_256")
+            if os.path.exists(fallback_256):
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Cache dir '{cache_dir}' not found. Falling back to '{fallback_256}'."
+                )
+                cache_dir = fallback_256
+            else:
+                raise FileNotFoundError(
+                    f"Cache directory '{cache_dir}' does not exist. Please check configs/env.yaml or run preprocessing."
+                )
+
         self.cache_dir = cache_dir
         self.target_slices = target_slices
         self.transforms = transforms
@@ -75,14 +95,18 @@ class TriPlanarKneeDataset(Dataset):
         npy_files = [f for f in os.listdir(study_dir) if f.endswith(".npy")]
         return os.path.join(study_dir, npy_files[0]) if npy_files else None
 
-    def _load_and_transform_plane(self, series_path: Optional[str]) -> torch.Tensor:
-        if series_path is not None and os.path.exists(series_path):
-            try:
-                volume = np.load(series_path)
-            except Exception:
-                volume = np.zeros((self.target_slices, 3, 256, 256), dtype=np.uint8)
-        else:
-            volume = np.zeros((self.target_slices, 3, 256, 256), dtype=np.uint8)
+    def _load_and_transform_plane(self, series_path: Optional[str], study_uid: str = "", plane: str = "") -> torch.Tensor:
+        if series_path is None or not os.path.exists(series_path):
+            raise FileNotFoundError(
+                f"Missing cached volume for StudyInstanceUID '{study_uid}' ({plane} plane) in '{self.cache_dir}'. "
+                f"Please ensure preprocessing has completed or verify configs/env.yaml data.cache_dir."
+            )
+        try:
+            volume = np.load(series_path)
+        except Exception as e:
+            raise IOError(
+                f"Corrupted cache file for StudyInstanceUID '{study_uid}' ({plane} plane) at '{series_path}': {e}"
+            )
 
         # Depth Resampling to target_slices
         cur_d = volume.shape[0]
@@ -116,9 +140,9 @@ class TriPlanarKneeDataset(Dataset):
         cor_path = self._get_plane_series_path(study_uid, "Coronal")
         ax_path = self._get_plane_series_path(study_uid, "Axial")
 
-        sag_tensor = self._load_and_transform_plane(sag_path)  # (D, 3, H, W)
-        cor_tensor = self._load_and_transform_plane(cor_path)  # (D, 3, H, W)
-        ax_tensor = self._load_and_transform_plane(ax_path)    # (D, 3, H, W)
+        sag_tensor = self._load_and_transform_plane(sag_path, study_uid=study_uid, plane="Sagittal")  # (D, 3, H, W)
+        cor_tensor = self._load_and_transform_plane(cor_path, study_uid=study_uid, plane="Coronal")   # (D, 3, H, W)
+        ax_tensor = self._load_and_transform_plane(ax_path, study_uid=study_uid, plane="Axial")       # (D, 3, H, W)
 
         # 2. Extract 12 Tri-State Targets (supports +1.0, 0.0, NaN)
         target_vals = []

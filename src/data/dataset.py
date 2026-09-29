@@ -36,7 +36,7 @@ class KneeMRIDataset(Dataset):
     def __init__(
         self,
         df: Union[pd.DataFrame, str],
-        cache_dir: str = "./data/preprocessed_256",
+        cache_dir: Optional[str] = None,
         series_df: Optional[Union[pd.DataFrame, str]] = None,
         target_slices: Optional[int] = None,
         preferred_plane: Optional[str] = None,
@@ -54,6 +54,27 @@ class KneeMRIDataset(Dataset):
             is_training: Boolean flag for training vs validation.
         """
         self.df = load_dataframe_auto(df)
+        if cache_dir is None:
+            try:
+                from src.config import resolve_cache_dir
+                cache_dir = str(resolve_cache_dir())
+            except Exception:
+                cache_dir = "./data/cached_series_384"
+
+        # Validate cache_dir exists, with graceful fallback to preprocessed_256 if available
+        if not os.path.exists(cache_dir):
+            fallback_256 = os.path.join(os.path.dirname(cache_dir), "preprocessed_256")
+            if os.path.exists(fallback_256):
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Cache dir '{cache_dir}' not found. Falling back to '{fallback_256}'."
+                )
+                cache_dir = fallback_256
+            else:
+                raise FileNotFoundError(
+                    f"Cache directory '{cache_dir}' does not exist. Please check configs/env.yaml or run preprocessing."
+                )
+
         self.cache_dir = cache_dir
         self.target_slices = target_slices
         self.preferred_plane = preferred_plane
@@ -111,14 +132,18 @@ class KneeMRIDataset(Dataset):
         study_uid = row["StudyInstanceUID"]
 
         series_path = self._find_series_path(study_uid)
-        if series_path is not None and os.path.exists(series_path):
-            try:
-                # Load uint8 volume: shape (D, 3, H, W)
-                volume = np.load(series_path)
-            except Exception:
-                volume = np.zeros((24, 3, 256, 256), dtype=np.uint8)
-        else:
-            volume = np.zeros((24, 3, 256, 256), dtype=np.uint8)
+        if series_path is None or not os.path.exists(series_path):
+            raise FileNotFoundError(
+                f"Missing cached volume for StudyInstanceUID '{study_uid}' in cache directory '{self.cache_dir}'. "
+                f"Please ensure preprocessing has completed or verify configs/env.yaml data.cache_dir."
+            )
+        try:
+            # Load uint8 volume: shape (D, 3, H, W)
+            volume = np.load(series_path)
+        except Exception as e:
+            raise IOError(
+                f"Corrupted cache file for StudyInstanceUID '{study_uid}' at {series_path}: {e}"
+            )
 
         # Depth resampling if fixed slice count is requested
         if self.target_slices is not None and volume.shape[0] != self.target_slices:

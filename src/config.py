@@ -85,6 +85,7 @@ def _load_config() -> _Namespace:
     # Environment variable overrides
     _env_overrides = {
         "data.data_dir": os.environ.get("KNEEVISION_DATA_DIR", ""),
+        "data.cache_dir": os.environ.get("KNEEVISION_CACHE_DIR", ""),
         "checkpoints.local_dir": os.environ.get("KNEEVISION_CKPT_DIR", ""),
         "kaggle.username": os.environ.get("KAGGLE_USERNAME", ""),
         "project.repo_root": os.environ.get("KNEEVISION_REPO_ROOT", ""),
@@ -105,6 +106,49 @@ cfg = _load_config()
 
 
 # ── Public helpers ────────────────────────────────────────────────────────────
+def resolve_cache_dir(must_exist: bool = False) -> Path:
+    """
+    Return the preprocessed series cache directory.
+    Priority:
+      1. KNEEVISION_CACHE_DIR env var
+      2. configs/env.yaml data.cache_dir
+      3. configs/base.yaml data.cache_dir
+      4. Auto-detect existing candidate paths:
+         data/cached_series_384, data/cached_series_288px, data/preprocessed_256
+    """
+    # 1. Environment variable
+    if os.environ.get("KNEEVISION_CACHE_DIR"):
+        p = Path(os.environ["KNEEVISION_CACHE_DIR"]).expanduser()
+        if not p.is_absolute():
+            p = REPO_ROOT / p
+        p = p.resolve()
+        if not must_exist or p.exists():
+            return p
+
+    # 2. Config YAML
+    data_cfg = getattr(cfg, "data", None)
+    configured = getattr(data_cfg, "cache_dir", "") if data_cfg else ""
+    if configured:
+        p = Path(configured).expanduser()
+        if not p.is_absolute():
+            p = REPO_ROOT / p
+        p = p.resolve()
+        if not must_exist or p.exists():
+            return p
+
+    # 3. Candidate fallback detection if must_exist is True
+    candidates = [
+        REPO_ROOT / "data" / "cached_series_384",
+        REPO_ROOT / "data" / "cached_series_288px",
+        REPO_ROOT / "data" / "preprocessed_256",
+    ]
+    for cand in candidates:
+        if cand.exists():
+            return cand
+
+    # Default fallback
+    return (REPO_ROOT / "data" / "cached_series_384").resolve()
+
 def resolve_data_dir() -> Path:
     """
     Return the RSNA dataset directory, searching candidate paths in order.

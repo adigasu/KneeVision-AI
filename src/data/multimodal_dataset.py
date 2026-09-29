@@ -118,13 +118,17 @@ class MultimodalKneeDataset(Dataset):
 
         # 1. Load Volumetric MRI
         series_path = self._find_series_path(study_uid)
-        if series_path is not None and os.path.exists(series_path):
-            try:
-                volume = np.load(series_path)
-            except Exception:
-                volume = np.zeros((24, 3, 256, 256), dtype=np.uint8)
-        else:
-            volume = np.zeros((24, 3, 256, 256), dtype=np.uint8)
+        if series_path is None or not os.path.exists(series_path):
+            raise FileNotFoundError(
+                f"Missing cached volume for StudyInstanceUID '{study_uid}' in '{self.cache_dir}'. "
+                f"Please ensure preprocessing has completed or verify configs/env.yaml data.cache_dir."
+            )
+        try:
+            volume = np.load(series_path)
+        except Exception as e:
+            raise IOError(
+                f"Corrupted cache file for StudyInstanceUID '{study_uid}' at {series_path}: {e}"
+            )
 
         # Depth Resampling
         if self.target_slices is not None and volume.shape[0] != self.target_slices:
