@@ -38,10 +38,6 @@ class BaseFoundationExtractor(nn.Module):
 
 
 class RadImageNetExtractor(BaseFoundationExtractor):
-    """
-    RadImageNet: Radiology-domain pretrained ResNet-50 (1.35M medical images across CT/MRI/US/X-ray).
-    Outputs 2048-dimensional features.
-    """
     def __init__(self, repo_id: str = "convergedmachine/RadImagenet", filename: str = "resnet50.pth", img_size: int = 224):
         super().__init__(model_name="radimagenet", embed_dim=2048, img_size=img_size)
         if hf_hub_download is None:
@@ -69,7 +65,7 @@ class RadImageNetExtractor(BaseFoundationExtractor):
 
 
 class DINOExtractor(BaseFoundationExtractor):
-    def __init__(self, variant: str = "vit_base_patch16_dinov3", img_size: int = 280):
+    def __init__(self, variant: str = "vit_base_patch16_dinov3", img_size: int = 288):
         embed_dims = {
             "vit_small_patch14_dinov2.lvd142m": 384,
             "vit_base_patch14_dinov2.lvd142m": 768,
@@ -85,6 +81,8 @@ class DINOExtractor(BaseFoundationExtractor):
             variant,
             pretrained=True,
             num_classes=0,
+            img_size=img_size,
+            dynamic_img_size=True,
             in_chans=3,
         ).eval()
 
@@ -125,7 +123,6 @@ class SigLIPExtractor(BaseFoundationExtractor):
             "vit_base_patch16_siglip_256": 768,
             "vit_large_patch16_siglip_256": 1024,
             "vit_so400m_patch14_siglip_384": 1152,
-            "vit_so400m_patch14_siglip_378": 1152,
         }
         dim = embed_dims.get(variant, 768)
         super().__init__(model_name=variant, embed_dim=dim, img_size=img_size)
@@ -133,6 +130,7 @@ class SigLIPExtractor(BaseFoundationExtractor):
             variant,
             pretrained=True,
             num_classes=0,
+            img_size=img_size,
             dynamic_img_size=True,
             in_chans=3,
         ).eval()
@@ -169,9 +167,9 @@ class GenericTimmExtractor(BaseFoundationExtractor):
 def get_foundation_extractor(name: str, device: str = "cuda") -> BaseFoundationExtractor:
     name_lower = name.lower()
     if "radimage" in name_lower:
-        extractor = RadImageNetExtractor()
+        extractor = RadImageNetExtractor(img_size=224)
     elif "biomed" in name_lower:
-        extractor = BioMedCLIPExtractor()
+        extractor = BioMedCLIPExtractor(img_size=224)
     elif "dinov3_small" in name_lower or "dinov3_s" in name_lower:
         extractor = DINOExtractor("vit_small_patch16_dinov3", img_size=288)
     elif "dinov3_large" in name_lower or "dinov3_l" in name_lower:
@@ -185,13 +183,13 @@ def get_foundation_extractor(name: str, device: str = "cuda") -> BaseFoundationE
     elif "dinov2" in name_lower:
         extractor = DINOExtractor("vit_base_patch14_dinov2.lvd142m", img_size=280)
     elif "medsiglip" in name_lower or "siglip_so400m" in name_lower:
-        extractor = SigLIPExtractor("vit_so400m_patch14_siglip_384", img_size=378)
+        extractor = SigLIPExtractor("vit_so400m_patch14_siglip_384", img_size=384)
     elif "siglip" in name_lower:
         extractor = SigLIPExtractor("vit_base_patch16_siglip_224", img_size=224)
     elif "swin" in name_lower:
         extractor = GenericTimmExtractor("swin_base_patch4_window7_224", img_size=224)
     elif "convnext_small" in name_lower:
-        extractor = GenericTimmExtractor("convnext_small.in12k_ft_in1k", img_size=288)
+        extractor = GenericTimmExtractor("convnext_small.in12k_ft_in1k", img_size=320)
     elif "convnext_tiny" in name_lower:
         extractor = GenericTimmExtractor("convnext_tiny.in12k_ft_in1k", img_size=288)
     else:

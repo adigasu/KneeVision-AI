@@ -1,10 +1,29 @@
+#!/usr/bin/env python3
+"""
+RSNA Knee Abnormality Detection - Comprehensive Foundation Model Benchmark & Local Inference Profiler.
+
+Evaluates:
+1. 5-Fold Cross-Validation Full Val Macro AUC
+2. Gold Benchmark Subset (N=58) Macro AUC
+3. Local Inference Latency (ms/slice, ms/16-slice study, ms/48-slice triplanar study, FPS, Studies/sec)
+4. Model comparisons including DINOv3, MedSigLIP, and RadImageNet
+"""
+
+import os
+import sys
 import time
 import json
+import argparse
 from pathlib import Path
+from typing import Dict, List, Tuple, Any
+
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
 
 from src.models.mil_backbone import GatedAttentionMILPool
 from src.metrics.auc_metrics import compute_macro_auc, TARGET_COLUMNS
@@ -96,6 +115,8 @@ def measure_inference_latency(model_name: str, device: str = "cuda:0", num_warmu
             "throughput_48_studies_sec": round(1000.0 / study_48_ms, 1) if study_48_ms > 0 else 0,
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return {"error": str(e)}
 
 def main():
@@ -117,10 +138,10 @@ def main():
     uids = labels_df[uid_col].astype(str).tolist()
 
     emb_dir = Path("artifacts/experiments/benchmark_foundation_models/embeddings")
-    available_models = ["biomedclip", "dinov2_small", "dinov2", "siglip"]
+    available_models = ["biomedclip", "dinov2_small", "dinov2", "dinov3", "siglip", "medsiglip", "radimagenet"]
     model_embs = {}
     for m in available_models:
-        payload = torch.load(emb_dir / f"{m}_embeddings.pt", map_location="cpu")
+        payload = torch.load(emb_dir / f"{m}_embeddings.pt", map_location="cpu", weights_only=False)
         m_dict = payload["embeddings"]
         dim = payload.get("embed_dim", 512)
         
@@ -140,20 +161,32 @@ def main():
         print(f"Loaded {m}: {model_embs[m].shape} on {device}")
 
     configs = [
-        ["biomedclip"],
-        ["dinov2_small"],
+        # Individual Models
+        ["radimagenet"],
+        ["dinov3"],
+        ["medsiglip"],
         ["dinov2"],
+        ["dinov2_small"],
+        ["biomedclip"],
         ["siglip"],
+        # Key Dual-Foundation Combos
+        ["dinov3", "medsiglip"],
+        ["dinov3", "biomedclip"],
+        ["radimagenet", "dinov3"],
+        ["radimagenet", "dinov2"],
+        ["radimagenet", "biomedclip"],
+        ["radimagenet", "medsiglip"],
         ["dinov2", "biomedclip"],
-        ["dinov2", "siglip"],
-        ["biomedclip", "siglip"],
-        ["dinov2", "biomedclip", "siglip"],
+        # Top Multi-Foundation Fusions
+        ["dinov3", "medsiglip", "biomedclip"],
+        ["radimagenet", "dinov3", "medsiglip"],
+        ["radimagenet", "dinov3", "medsiglip", "biomedclip"],
     ]
 
     all_results = {}
-    print("\n" + "="*80)
-    print("🚀 HIGH-SPEED VECTORIZED 5-FOLD CV ACROSS ALL FOUNDATION MODELS")
-    print("="*80)
+    print("\n" + "="*85)
+    print("🚀 5-FOLD CV BENCHMARK (RADIMAGENET + DINOV3 + MEDSIGLIP + DINOV2 + BIOMEDCLIP)")
+    print("="*85)
 
     for cfg in configs:
         tag = "+".join(cfg)
@@ -238,19 +271,22 @@ def main():
             "time_sec": round(elapsed, 2),
             "fold_details": [{"fold": i, "val_auc": round(r[0], 4), "gold_auc": round(r[1], 4)} for i, r in enumerate(fold_metrics)]
         }
-        print(f"[{tag:35s}] (Dim {in_features:4d}) | Val Macro AUC: {mean_val:.4f} ± {std_val:.4f} | Gold AUC: {mean_gold:.4f} ± {std_gold:.4f} | 5-Fold Time: {elapsed:.2f}s")
+        print(f"[{tag:46s}] (Dim {in_features:4d}) | Val Macro AUC: {mean_val:.4f} ± {std_val:.4f} | Gold AUC: {mean_gold:.4f} ± {std_gold:.4f} | Time: {elapsed:.2f}s")
 
-    print("\n" + "="*80)
-    print("⚡ PROFILING LOCAL INFERENCE LATENCY & THROUGHPUT (RTX A6000)")
-    print("="*80)
+    print("\n" + "="*85)
+    print("⚡ PROFILING LOCAL INFERENCE LATENCY & THROUGHPUT (NVIDIA RTX A6000)")
+    print("="*85)
 
     latency_models = [
         "convnext_tiny",
         "convnext_small",
         "dinov2_small",
         "dinov2",
+        "dinov3",
         "biomedclip",
         "siglip",
+        "medsiglip",
+        "radimagenet",
     ]
 
     latency_results = {}
@@ -264,6 +300,7 @@ def main():
     with open(out_file, "w") as f:
         json.dump({
             "gpu": torch.cuda.get_device_name(0),
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "results": all_results,
             "latency": latency_results,
         }, f, indent=2)

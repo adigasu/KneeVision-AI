@@ -25,6 +25,10 @@ from src.benchmarks.foundation_extractors import get_foundation_extractor
 from src.data.dataset import KneeMRIDataset, load_dataframe_auto
 
 
+def single_study_collate(batch):
+    return batch[0]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Extract foundation model slice embeddings")
     parser.add_argument("--model", type=str, default="radimagenet",
@@ -34,7 +38,7 @@ def main():
                         help="Foundation model name")
     parser.add_argument("--labels_path", type=str, default="data/dense_labels_master.parquet")
     parser.add_argument("--cache_dir", type=str, default="data/preprocessed_256")
-    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--output_dir", type=str, default="artifacts/experiments/benchmark_foundation_models/embeddings")
     parser.add_argument("--force", action="store_true", help="Force re-extraction even if embeddings file exists")
@@ -57,17 +61,17 @@ def main():
 
     df = load_dataframe_auto(args.labels_path)
     dataset = KneeMRIDataset(df=df, cache_dir=args.cache_dir, transforms=None, is_training=False)
+    loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=args.num_workers, collate_fn=single_study_collate, pin_memory=True)
     
-    print(f"Found {len(dataset)} studies in dataset.")
+    print(f"Found {len(dataset)} studies in dataset. Beginning extraction with {args.num_workers} parallel workers...")
 
     embeddings_dict = {}
     t_start = time.time()
 
     with torch.no_grad():
-        for i in tqdm(range(len(dataset)), desc=f"Extracting {args.model}"):
-            item = dataset[i]
+        for item in tqdm(loader, desc=f"Extracting {args.model}"):
             study_uid = item["study_uid"]
-            images = item["images"].to(args.device) # (D, 3, H, W)
+            images = item["images"].to(args.device, non_blocking=True) # (D, 3, H, W)
 
             # Resize if needed
             D, C, H, W = images.shape

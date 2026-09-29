@@ -82,11 +82,16 @@ class TriPlanarKneeModel(nn.Module):
         self.num_classes = num_classes
 
         # Shared 2.5D Slice Feature Extractor
+        extra_kwargs = {}
+        if any(k in backbone_name.lower() for k in ['dino', 'siglip', 'vit']):
+            extra_kwargs['dynamic_img_size'] = True
+
         self.backbone = timm.create_model(
             backbone_name,
             pretrained=pretrained,
             num_classes=0,
             in_chans=3,
+            **extra_kwargs,
         )
         if use_grad_checkpointing and hasattr(self.backbone, "set_grad_checkpointing"):
             try:
