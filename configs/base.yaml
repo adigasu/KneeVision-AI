@@ -4,6 +4,7 @@ project:
   output_dir: "./experiments"
 
 data:
+  cache_dir: "./data/cached_series_384"
   data_dir: "../rsna-knee-abnormality-detection"
   train_csv: "../rsna-knee-abnormality-detection/train.csv"
   train_series_csv: "../rsna-knee-abnormality-detection/train_series.csv"
