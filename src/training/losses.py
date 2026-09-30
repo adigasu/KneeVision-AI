@@ -119,3 +119,42 @@ class ConfidenceWeightedBCEWithLogitsLoss(nn.Module):
         # Weighted loss normalized strictly over confident evidence
         weighted_loss = weights * bce
         return weighted_loss.sum() / (weights.sum() + self.eps)
+
+class MixedTargetBCEWithLogitsLoss(nn.Module):
+    """
+    Mixed Target Binary Cross-Entropy Loss:
+        y_train = alpha * y_hard + (1 - alpha) * y_soft
+
+    Gracefully handles missing/NaN values in hard_targets and applies
+    confidence weighting (2 * |p - 0.5|) to unanchored soft targets.
+    """
+
+    def __init__(self, alpha: float = 0.7, eps: float = 1e-6):
+        super().__init__()
+        self.alpha = alpha
+        self.eps = eps
+
+    def forward(
+        self,
+        logits: torch.Tensor,
+        hard_targets: torch.Tensor,
+        soft_targets: torch.Tensor,
+    ) -> torch.Tensor:
+        has_hard = ~torch.isnan(hard_targets)
+        clean_hard = torch.where(has_hard, hard_targets, torch.zeros_like(hard_targets))
+
+        # Mixed target
+        mixed_target = torch.where(
+            has_hard,
+            self.alpha * clean_hard + (1.0 - self.alpha) * soft_targets,
+            soft_targets,
+        )
+
+        soft_weights = 2.0 * torch.abs(soft_targets - 0.5)
+        sample_weights = torch.where(has_hard, torch.ones_like(hard_targets), soft_weights)
+
+        bce = F.binary_cross_entropy_with_logits(logits, mixed_target, reduction='none')
+        weighted_loss = sample_weights * bce
+
+        return weighted_loss.sum() / sample_weights.sum().clamp(min=self.eps)
+
