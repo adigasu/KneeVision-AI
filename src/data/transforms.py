@@ -16,7 +16,7 @@ def get_training_transforms(image_size: Union[int, Tuple[int, int]] = (256, 256)
     else:
         h, w = image_size[0], image_size[1]
 
-    return A.Compose([
+    return A.ReplayCompose([
         A.Resize(h, w),
         A.HorizontalFlip(p=0.5),
         A.Affine(scale=(0.9, 1.1), rotate=(-15, 15), translate_percent=(-0.06, 0.06), p=0.6),
@@ -33,7 +33,7 @@ def get_validation_transforms(image_size: Union[int, Tuple[int, int]] = (256, 25
     else:
         h, w = image_size[0], image_size[1]
 
-    return A.Compose([
+    return A.ReplayCompose([
         A.Resize(h, w),
         ToTensorV2(),
     ])

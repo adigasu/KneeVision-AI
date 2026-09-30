@@ -153,12 +153,21 @@ class KneeMRIDataset(Dataset):
 
         num_slices = volume.shape[0]
 
-        # Apply transforms slice-by-slice
+        # Apply transforms consistently across 3D volume
         transformed_slices = []
+        replay_dict = None
         for s in range(num_slices):
             slice_img = volume[s].transpose(1, 2, 0)  # (H, W, 3) uint8
             if self.transforms is not None:
-                res = self.transforms(image=slice_img)
+                if hasattr(self.transforms, 'replay') and hasattr(self.transforms, '__call__'):
+                    if s == 0:
+                        res = self.transforms(image=slice_img)
+                        replay_dict = res.get('replay', None)
+                    else:
+                        res = self.transforms.replay(replay_dict, image=slice_img) if replay_dict else self.transforms(image=slice_img)
+                else:
+                    res = self.transforms(image=slice_img)
+
                 slice_tensor = res["image"]  # (3, H, W) float tensor
                 if not isinstance(slice_tensor, torch.Tensor):
                     slice_tensor = torch.tensor(slice_tensor.transpose(2, 0, 1), dtype=torch.float32) / 255.0
