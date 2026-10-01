@@ -1,3 +1,4 @@
+from typing import Optional
 """
 RSNA Knee Abnormality Detection - Loss Functions for Multi-Label Class Imbalance.
 Includes Asymmetric Focal Loss (ASL) and Masked Binary Cross Entropy (BCE).
@@ -157,4 +158,87 @@ class MixedTargetBCEWithLogitsLoss(nn.Module):
         weighted_loss = sample_weights * bce
 
         return weighted_loss.sum() / sample_weights.sum().clamp(min=self.eps)
+
+
+class ConsensusDenoisedBCEWithLogitsLoss(nn.Module):
+    """
+    4-Tier Noise-Robust Binary Cross-Entropy Loss:
+    - Tier 1 (is_gold == True): Gold standard human consensus annotations (N=58).
+      Highest priority (w=2.0) and strict binary ground truth.
+    - Tier 2 (Active Contradictions): Heuristic tristate and LLM directly disagree
+      (Tri=1 & Soft<0.30 or Tri=0 & Soft>0.70).
+      Masked out with zero weight (w=0.0) to eliminate text extraction errors.
+    - Tier 3 (Consensus Agreements): Heuristic tristate and LLM agree
+      (Tri=1 & Soft>=0.70 or Tri=0 & Soft<=0.30).
+      Standard weight (w=1.0) and gentle label smoothing (0.05 / 0.95).
+    - Tier 4 (Sparse Unannotated Hard Targets): Tristate is NaN, only LLM soft target exists.
+      Retained with confidence weighting w = 2 * |p - 0.5| to prevent gradient starvation!
+    """
+
+    def __init__(
+        self,
+        gold_weight: float = 2.0,
+        pos_thresh: float = 0.70,
+        neg_thresh: float = 0.30,
+        eps: float = 1e-6,
+    ):
+        super().__init__()
+        self.gold_weight = gold_weight
+        self.pos_thresh = pos_thresh
+        self.neg_thresh = neg_thresh
+        self.eps = eps
+
+    def forward(
+        self,
+        logits: torch.Tensor,
+        hard_targets: torch.Tensor,
+        soft_targets: torch.Tensor,
+        is_gold: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        has_hard = ~torch.isnan(hard_targets)
+
+        # 1. Contradictions (where both are present and actively disagree)
+        conflict_pos = (hard_targets == 1.0) & (soft_targets < self.neg_thresh)
+        conflict_neg = (hard_targets == 0.0) & (soft_targets > self.pos_thresh)
+        is_conflict = has_hard & (conflict_pos | conflict_neg)
+
+        # 2. Consensus agreements (where both are present and agree)
+        agree_pos = (hard_targets == 1.0) & (soft_targets >= self.pos_thresh)
+        agree_neg = (hard_targets == 0.0) & (soft_targets <= self.neg_thresh)
+        is_agree = has_hard & (agree_pos | agree_neg)
+
+        # 3. Base weights and targets:
+        # Default for unanchored soft targets (hard is NaN) -> confidence weighting 2 * |p - 0.5|
+        soft_weights = 2.0 * torch.abs(soft_targets - 0.5)
+        weights = torch.where(has_hard, torch.zeros_like(logits), soft_weights)
+        clean_targets = soft_targets.clone()
+
+        # Apply agreement (w=1.0, smoothed 0.95 / 0.05)
+        weights = torch.where(is_agree, torch.ones_like(weights), weights)
+        clean_targets = torch.where(
+            agree_pos,
+            torch.tensor(0.95, device=logits.device, dtype=logits.dtype),
+            clean_targets,
+        )
+        clean_targets = torch.where(
+            agree_neg,
+            torch.tensor(0.05, device=logits.device, dtype=logits.dtype),
+            clean_targets,
+        )
+
+        # Mask out conflicts (w=0.0)
+        weights = torch.where(is_conflict, torch.zeros_like(weights), weights)
+
+        # 4. Gold overrides everything
+        if is_gold is not None:
+            gold_mask = is_gold.view(-1, 1).expand_as(logits).bool()
+            valid_gold = gold_mask & has_hard
+            weights = torch.where(valid_gold, torch.full_like(weights, self.gold_weight), weights)
+            clean_targets = torch.where(valid_gold, hard_targets, clean_targets)
+
+        # 5. Weighted binary cross-entropy with logits
+        bce = F.binary_cross_entropy_with_logits(logits, clean_targets, reduction='none')
+        weighted_loss = weights * bce
+
+        return weighted_loss.sum() / weights.sum().clamp(min=self.eps)
 

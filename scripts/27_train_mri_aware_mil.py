@@ -24,7 +24,7 @@ from rich.console import Console
 from rich.table import Table
 
 from src.models.mil_backbone import LabelSpecificKneeMILModel
-from src.training.losses import MixedTargetBCEWithLogitsLoss
+from src.training.losses import MixedTargetBCEWithLogitsLoss, ConsensusDenoisedBCEWithLogitsLoss
 from src.data.transforms import get_training_transforms, get_validation_transforms
 from src.metrics.auc_metrics import compute_macro_auc, TARGET_COLUMNS
 from src.utils.common import seed_everything
@@ -261,17 +261,22 @@ def main():
     parser.add_argument('--grad_accum_steps', type=int, default=4)
     parser.add_argument('--lr', type=float, default=2e-4)
     parser.add_argument('--backbone_lr_mult', type=float, default=0.15)
+    parser.add_argument('--loss_type', type=str, default='consensus_denoised', choices=['consensus_denoised', 'mixed_target'], help='Loss formulation: consensus_denoised (3-tier) or mixed_target')
+    parser.add_argument('--gold_weight', type=float, default=2.0, help='Weight multiplier for gold human consensus samples')
+    parser.add_argument('--pos_thresh', type=float, default=0.70, help='Positive threshold for consensus agreement')
+    parser.add_argument('--neg_thresh', type=float, default=0.30, help='Negative threshold for consensus agreement')
     parser.add_argument('--alpha', type=float, default=0.7)
     parser.add_argument('--target_slices', type=int, default=32)
     parser.add_argument('--image_size', type=int, default=288)
     parser.add_argument('--device', type=str, default='cuda:0')
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--output_dir', type=str, default='artifacts/experiments/phase_11_convnext_tiny_mri_aware')
+    parser.add_argument('--output_dir', type=str, default=None, help='Explicit output dir. If None, defaults to artifacts/experiments/phase_11_{backbone}/{exp_name}')
+    parser.add_argument('--exp_name', type=str, default='consensus_denoised', help='Experiment subfolder name under phase_11_{backbone}/')
     parser.add_argument('--dump_aug_visuals', action='store_true', default=False, help='Dump visual of [raw, augmented] for 5 random samples during epoch 1')
     args = parser.parse_args()
 
     seed_everything(42)
-    console = Console()
+    console = Console(record=True)
 
     # Resolve backbone aliases and patch-size constraints
     if args.backbone in ('dinov2_small', 'dinov2_s', 'dinov2'):
@@ -283,15 +288,18 @@ def main():
         actual_backbone = args.backbone
         backbone_tag = args.backbone
 
-    if args.output_dir == 'artifacts/experiments/phase_11_convnext_tiny_mri_aware' and backbone_tag != 'convnext_tiny':
-        args.output_dir = f'artifacts/experiments/phase_11_{backbone_tag}_mri_aware'
+    if args.output_dir is None:
+        args.output_dir = os.path.join('artifacts/experiments', f'phase_11_{backbone_tag}', args.exp_name)
 
-    os.makedirs(os.path.join(args.output_dir, 'checkpoints'), exist_ok=True)
+    log_dir = os.path.join(args.output_dir, 'logs')
+    ckpt_dir = os.path.join(args.output_dir, 'checkpoints')
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(ckpt_dir, exist_ok=True)
 
     console.print(f'[bold green]╔══════════════════════════════════════════════════════════════════╗[/bold green]')
     console.print(f'[bold green]║ Phase 11: {backbone_tag.upper():<20} with MRI-Aware Label-Specific MIL   ║[/bold green]')
     console.print(f'[bold green]╚══════════════════════════════════════════════════════════════════╝[/bold green]')
-    console.print(f'Fold: {args.fold} | Epochs: {args.epochs} | Slices: {args.target_slices} | Res: {args.image_size}px | Alpha: {args.alpha}')
+    console.print(f'Fold: {args.fold} | Epochs: {args.epochs} | Slices: {args.target_slices} | Res: {args.image_size}px | Loss: {args.loss_type} (Gold W: {args.gold_weight})')
 
     # Load master labels
     df_splits = pd.read_parquet('data/splits_5fold.parquet')
@@ -378,7 +386,14 @@ def main():
 
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
     scaler = torch.amp.GradScaler('cuda')
-    criterion = MixedTargetBCEWithLogitsLoss(alpha=args.alpha)
+    if args.loss_type == 'consensus_denoised':
+        criterion = ConsensusDenoisedBCEWithLogitsLoss(
+            gold_weight=args.gold_weight,
+            pos_thresh=args.pos_thresh,
+            neg_thresh=args.neg_thresh,
+        )
+    else:
+        criterion = MixedTargetBCEWithLogitsLoss(alpha=args.alpha)
 
     best_macro_auc = 0.0
     best_gold_auc = 0.0
@@ -412,10 +427,14 @@ def main():
             imgs = batch['images'].to(args.device)
             hard = batch['hard_targets'].to(args.device)
             soft = batch['soft_targets'].to(args.device)
+            is_gold = batch['is_gold'].to(args.device)
 
             with torch.amp.autocast('cuda', dtype=torch.float16):
                 out = model(imgs)
-                loss = criterion(out['logits'], hard, soft)
+                if args.loss_type == 'consensus_denoised':
+                    loss = criterion(out['logits'], hard, soft, is_gold=is_gold)
+                else:
+                    loss = criterion(out['logits'], hard, soft)
                 loss = loss / args.grad_accum_steps
 
             scaler.scale(loss).backward()
@@ -424,11 +443,14 @@ def main():
             if (step + 1) % args.grad_accum_steps == 0 or (step + 1) == len(train_loader):
                 scaler.unscale_(optimizer)
                 nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                scale_before = scaler.get_scale()
                 scaler.step(optimizer)
                 scaler.update()
+                scale_after = scaler.get_scale()
                 optimizer.zero_grad()
-                scheduler.step()
-                step_count += 1
+                if scale_before <= scale_after:
+                    scheduler.step()
+                    step_count += 1
 
         train_loss /= len(train_loader)
         val_macro, val_per_label, val_gold, val_preds = evaluate(model, val_loader, args.device, dump_visuals=(args.dump_aug_visuals and epoch == 1), output_dir=args.output_dir)
@@ -455,6 +477,7 @@ def main():
             f'Val Macro AUC: [bold {("green" if is_best else "white")}]{val_macro:.4f}[/] | '
             f'Gold AUC: [cyan]{val_gold:.4f}[/]{star}'
         )
+        console.save_text(os.path.join(log_dir, f'train_fold{args.fold}.log'))
 
     console.print(f'[bold green]Finished Fold {args.fold}![/bold green]')
     console.print(f'Previous Phase 6 Baseline Macro AUC: [yellow]0.8359[/yellow]')
@@ -466,7 +489,10 @@ def main():
     for i, col in enumerate(TARGET_COLUMNS):
         oof_df[f'pred_{col}'] = best_preds[:, i]
     oof_df.to_parquet(os.path.join(args.output_dir, f'oof_fold{args.fold}.parquet'), index=False)
-    console.print(f'OOF predictions saved to {args.output_dir}/oof_fold{args.fold}.parquet')
+    console.print(f'[bold green]✓ Checkpoints saved to: {ckpt_dir}/[/bold green]')
+    console.print(f'[bold green]✓ OOF predictions saved to: {args.output_dir}/oof_fold{args.fold}.parquet[/bold green]')
+    console.print(f'[bold green]✓ Full training logs saved to: {log_dir}/train_fold{args.fold}.log[/bold green]')
+    console.save_text(os.path.join(log_dir, f'train_fold{args.fold}.log'))
 
 if __name__ == '__main__':
     main()
