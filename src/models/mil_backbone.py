@@ -105,6 +105,13 @@ class KneeMILModel(nn.Module):
             nn.Linear(self.num_features, num_classes),
         )
 
+    def train(self, mode: bool = True):
+        super().train(mode)
+        if getattr(self, 'freeze_bn', False) and mode:
+            for m in self.backbone.modules():
+                if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d, nn.BatchNorm3d, nn.SyncBatchNorm)):
+                    m.eval()
+
     def extract_slice_features(self, images: torch.Tensor) -> torch.Tensor:
         """
         Extracts features per slice with memory-efficient chunking.
@@ -211,15 +218,19 @@ class LabelSpecificKneeMILModel(nn.Module):
         dropout: float = 0.3,
         in_chans: int = 3,
         chunk_size: int = 32,
+        freeze_bn: bool = False,
     ):
         super().__init__()
         self.backbone_name = backbone_name
         self.num_classes = num_classes
         self.chunk_size = chunk_size
+        self.freeze_bn = freeze_bn
 
         extra_kwargs = {}
         if 'dinov2' in backbone_name.lower():
             extra_kwargs = {'img_size': 336, 'dynamic_img_size': True}
+        elif any(k in backbone_name.lower() for k in ('dinov3', 'vit')):
+            extra_kwargs = {'img_size': 288, 'dynamic_img_size': True}
 
         self.backbone = timm.create_model(
             backbone_name,
@@ -228,6 +239,12 @@ class LabelSpecificKneeMILModel(nn.Module):
             in_chans=in_chans,
             **extra_kwargs,
         )
+        if self.freeze_bn:
+            for m in self.backbone.modules():
+                if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d, nn.BatchNorm3d, nn.SyncBatchNorm)):
+                    m.eval()
+                    for p in m.parameters():
+                        p.requires_grad = False
         self.num_features = self.backbone.num_features
 
         self.mil_pool = LabelSpecificGatedAttentionMILPool(
