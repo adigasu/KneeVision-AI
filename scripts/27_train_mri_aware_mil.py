@@ -273,6 +273,7 @@ def main():
     parser.add_argument('--output_dir', type=str, default=None, help='Explicit output dir. If None, defaults to artifacts/experiments/phase_11_{backbone}/{exp_name}')
     parser.add_argument('--exp_name', type=str, default='consensus_denoised', help='Experiment subfolder name under phase_11_{backbone}/')
     parser.add_argument('--dump_aug_visuals', action='store_true', default=False, help='Dump visual of [raw, augmented] for 5 random samples during epoch 1')
+    parser.add_argument('--freeze_bn', action='store_true', default=False, help='Freeze BatchNorm running statistics and affine params during training')
     args = parser.parse_args()
 
     seed_everything(42)
@@ -284,6 +285,14 @@ def main():
         backbone_tag = 'dinov2_small'
         if args.image_size % 14 != 0:
             args.image_size = (args.image_size // 14) * 14
+    elif args.backbone in ('dinov3_small', 'dinov3_s', 'dinov3'):
+        actual_backbone = 'vit_small_patch16_dinov3'
+        backbone_tag = 'dinov3_small'
+        if args.image_size % 16 != 0:
+            args.image_size = (args.image_size // 16) * 16
+    elif args.backbone in ('efficientnet_b0', 'effnet_b0', 'b0'):
+        actual_backbone = 'efficientnet_b0'
+        backbone_tag = 'efficientnet_b0'
     else:
         actual_backbone = args.backbone
         backbone_tag = args.backbone
@@ -364,6 +373,7 @@ def main():
         num_classes=12,
         mil_hidden_dim=128,
         chunk_size=args.target_slices,
+        freeze_bn=args.freeze_bn,
     )
     model.to(args.device)
 
@@ -399,7 +409,7 @@ def main():
     best_gold_auc = 0.0
     best_preds = None
 
-    console.print(f'[bold cyan]Starting Training: 25 Epochs with Label-Specific Attention + Mixed Loss[/bold cyan]')
+    console.print(f'[bold cyan]Starting Training: {args.epochs} Epochs with Label-Specific Attention + Mixed Loss[/bold cyan]')
 
     total_aug_to_dump = 5
     dumped_aug_count = 0
