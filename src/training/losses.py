@@ -181,12 +181,14 @@ class ConsensusDenoisedBCEWithLogitsLoss(nn.Module):
         pos_thresh: float = 0.70,
         neg_thresh: float = 0.30,
         eps: float = 1e-6,
+        class_weights: Optional[torch.Tensor] = None,
     ):
         super().__init__()
         self.gold_weight = gold_weight
         self.pos_thresh = pos_thresh
         self.neg_thresh = neg_thresh
         self.eps = eps
+        self.class_weights = class_weights
 
     def forward(
         self,
@@ -240,5 +242,114 @@ class ConsensusDenoisedBCEWithLogitsLoss(nn.Module):
         bce = F.binary_cross_entropy_with_logits(logits, clean_targets, reduction='none')
         weighted_loss = weights * bce
 
-        return weighted_loss.sum() / weights.sum().clamp(min=self.eps)
+        # 6. Optional pathology bottleneck class weighting
+        if self.class_weights is not None:
+            cw = self.class_weights.to(logits.device).view(1, -1)
+            weighted_loss = weighted_loss * cw
+            denom = (weights * cw).sum().clamp(min=self.eps)
+        else:
+            denom = weights.sum().clamp(min=self.eps)
 
+        return weighted_loss.sum() / denom
+
+
+
+class CurriculumDenoisedBCEWithLogitsLoss(nn.Module):
+    """
+    4-Tier Noise-Robust BCE with dynamic late-epoch small-loss sample trimming:
+    - Tier 1 (is_gold == True): Gold standard human consensus (N=58) always kept (w=2.0, never trimmed).
+    - Tier 2 (Active Contradictions): Heuristic tristate and LLM directly disagree -> Masked out (w=0.0).
+    - Tier 3 (Consensus Agreements): Heuristic tristate and LLM agree -> w=1.0 and smoothed (0.95/0.05).
+    - Tier 4 (Sparse Unannotated Hard Targets): Confidence weighting 2 * |p - 0.5|.
+    - Dynamic Curriculum (epoch >= trim_start_epoch):
+      Per-study loss is computed across all 12 pathologies. For non-gold silver studies, the top
+      `trim_ratio` (e.g. 10%) highest-loss studies in the batch are dynamically zeroed out,
+      preventing late-stage memorization of corrupt/ambiguous text report annotations.
+    """
+
+    def __init__(
+        self,
+        gold_weight: float = 2.0,
+        pos_thresh: float = 0.70,
+        neg_thresh: float = 0.30,
+        trim_ratio: float = 0.10,
+        trim_start_epoch: int = 5,
+        eps: float = 1e-6,
+    ):
+        super().__init__()
+        self.gold_weight = gold_weight
+        self.pos_thresh = pos_thresh
+        self.neg_thresh = neg_thresh
+        self.trim_ratio = trim_ratio
+        self.trim_start_epoch = trim_start_epoch
+        self.eps = eps
+
+    def forward(
+        self,
+        logits: torch.Tensor,
+        hard_targets: torch.Tensor,
+        soft_targets: torch.Tensor,
+        is_gold: Optional[torch.Tensor] = None,
+        epoch: int = 1,
+    ) -> torch.Tensor:
+        has_hard = ~torch.isnan(hard_targets)
+
+        # 1. Contradictions (where both are present and actively disagree)
+        conflict_pos = (hard_targets == 1.0) & (soft_targets < self.neg_thresh)
+        conflict_neg = (hard_targets == 0.0) & (soft_targets > self.pos_thresh)
+        is_conflict = has_hard & (conflict_pos | conflict_neg)
+
+        # 2. Consensus agreements (where both are present and agree)
+        agree_pos = (hard_targets == 1.0) & (soft_targets >= self.pos_thresh)
+        agree_neg = (hard_targets == 0.0) & (soft_targets <= self.neg_thresh)
+        is_agree = has_hard & (agree_pos | agree_neg)
+
+        # 3. Base weights and targets
+        soft_weights = 2.0 * torch.abs(soft_targets - 0.5)
+        weights = torch.where(has_hard, torch.zeros_like(logits), soft_weights)
+        clean_targets = soft_targets.clone()
+
+        # Apply agreement (w=1.0, smoothed 0.95 / 0.05)
+        weights = torch.where(is_agree, torch.ones_like(weights), weights)
+        clean_targets = torch.where(
+            agree_pos,
+            torch.tensor(0.95, device=logits.device, dtype=logits.dtype),
+            clean_targets,
+        )
+        clean_targets = torch.where(
+            agree_neg,
+            torch.tensor(0.05, device=logits.device, dtype=logits.dtype),
+            clean_targets,
+        )
+
+        # Mask out conflicts (w=0.0)
+        weights = torch.where(is_conflict, torch.zeros_like(weights), weights)
+
+        # 4. Gold overrides everything
+        is_gold_study = torch.zeros(logits.size(0), dtype=torch.bool, device=logits.device)
+        if is_gold is not None:
+            is_gold_study = is_gold.view(-1).bool()
+            gold_mask = is_gold_study.view(-1, 1).expand_as(logits)
+            valid_gold = gold_mask & has_hard
+            weights = torch.where(valid_gold, torch.full_like(weights, self.gold_weight), weights)
+            clean_targets = torch.where(valid_gold, hard_targets, clean_targets)
+
+        # 5. Weighted binary cross-entropy with logits
+        bce = F.binary_cross_entropy_with_logits(logits, clean_targets, reduction="none")
+        weighted_bce = weights * bce
+        study_loss = weighted_bce.sum(dim=-1)
+        study_weights = weights.sum(dim=-1)
+
+        # 6. Dynamic Small-Loss Sample Selection for late epochs
+        if epoch >= self.trim_start_epoch and self.trim_ratio > 0.0 and logits.size(0) > 1:
+            silver_mask = ~is_gold_study
+            num_silver = silver_mask.sum().item()
+            if num_silver > 1:
+                k = max(1, int(num_silver * (1.0 - self.trim_ratio)))
+                silver_losses = study_loss[silver_mask].detach()
+                cutoff = torch.kthvalue(silver_losses, k).values
+                keep_study = is_gold_study | (study_loss <= cutoff)
+                study_loss = study_loss * keep_study.float()
+                study_weights = study_weights * keep_study.float()
+
+        return study_loss.sum() / study_weights.sum().clamp(min=self.eps)
