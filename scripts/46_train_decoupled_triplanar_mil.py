@@ -277,7 +277,7 @@ def main():
 
         mcl_auc = val_per_label.get("MCL", 0.0)
         gold_mcl = gold_per_label.get("MCL", 0.0)
-        is_best = gold_macro > best_gold_auc or (gold_macro == best_gold_auc and val_macro > best_val_macro)
+        is_best = val_macro > best_val_macro
 
         star = "⭐ BEST" if is_best else ""
         console.print(
@@ -295,8 +295,8 @@ def main():
         )
 
         if is_best:
-            best_gold_auc = gold_macro
             best_val_macro = val_macro
+            best_gold_auc = gold_macro
             best_preds = preds
             torch.save(
                 {
