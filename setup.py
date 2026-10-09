@@ -6,5 +6,5 @@ setup(
     description="Multimodal Knee MRI Abnormality Detection & Foundation Modeling",
     author="Sukesh Adiga",
     packages=find_packages(),
-    python_requires=">=3.10",
+    python_requires=">=3.9",
 )
