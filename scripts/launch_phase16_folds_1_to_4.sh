@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-PYTHON="/home/AQ44130/miniconda3/envs/rsna-knee/bin/python"
+PYTHON="python"
 WORKDIR="/data/users/sukesh/KneeVision-AI"
 cd $WORKDIR
 

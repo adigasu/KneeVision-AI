@@ -1,5 +1,5 @@
 #!/bin/bash
-PYTHON=/home/AQ44130/miniconda3/envs/rsna-knee/bin/python
+PYTHON=python
 
 echo "Launching 336px Tiny on GPU 0..."
 nohup $PYTHON -u scripts/46_train_decoupled_triplanar_mil.py \

@@ -9,7 +9,7 @@
 set -e
 mkdir -p logs checkpoints
 
-PY="/home/AQ44130/miniconda3/envs/rsna-knee/bin/python"
+PY="python"
 
 echo "=================================================================="
 echo " Launching Phase 15 2-GPU Overnight Training (Dataset v3 + Loss)  "

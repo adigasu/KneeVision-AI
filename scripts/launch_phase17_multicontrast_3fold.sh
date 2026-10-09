@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-PYTHON="/home/AQ44130/miniconda3/envs/rsna-knee/bin/python"
+PYTHON="python"
 LOG_DIR="logs"
 mkdir -p "${LOG_DIR}" checkpoints
 

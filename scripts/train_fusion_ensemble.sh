@@ -25,7 +25,7 @@ set -euo pipefail
 ulimit -n 65535 2>/dev/null || true
 
 # Locate Python binary
-PYTHON_BIN="${PYTHON_BIN:-/home/AQ44130/miniconda3/envs/rsna-knee/bin/python}"
+PYTHON_BIN="${PYTHON_BIN:-python}"
 if [[ ! -x "${PYTHON_BIN}" ]]; then
     PYTHON_BIN="$(which python3)"
 fi

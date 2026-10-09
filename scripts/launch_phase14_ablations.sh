@@ -2,7 +2,7 @@
 # RSNA Knee Abnormality Detection - Phase 14 Independent Ablation Launcher (20 Epochs Benchmark)
 set -e
 
-PY="/home/AQ44130/miniconda3/envs/rsna-knee/bin/python"
+PY="python"
 
 mkdir -p logs checkpoints
 

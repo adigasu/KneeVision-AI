@@ -40,7 +40,7 @@
 set -euo pipefail
 
 # Locate Python binary (conda env preferred, fallback to system python3)
-PYTHON_BIN="${PYTHON_BIN:-/home/AQ44130/miniconda3/envs/rsna-knee/bin/python}"
+PYTHON_BIN="${PYTHON_BIN:-python}"
 if [[ ! -x "${PYTHON_BIN}" ]]; then
     PYTHON_BIN="$(which python3)"
 fi

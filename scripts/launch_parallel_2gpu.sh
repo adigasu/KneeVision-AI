@@ -21,7 +21,7 @@ echo "Logs Directory: artifacts/experiments/phase_09_parallel_finetune/logs/"
 echo "======================================================================================"
 
 # Launch Model 1 on GPU 0
-nohup /home/AQ44130/miniconda3/envs/rsna-knee/bin/python -u scripts/24_train_parallel_2gpu_finetune.py \
+nohup python -u scripts/24_train_parallel_2gpu_finetune.py \
     --backbone_name "${MODEL1}" \
     --device "cuda:0" \
     --epochs ${EPOCHS} \
@@ -42,7 +42,7 @@ PID1=$!
 echo "✅ GPU 0 Process Launched [PID: ${PID1}] -> Log: artifacts/experiments/phase_09_parallel_finetune/logs/gpu0_${MODEL1//\//_}.log"
 
 # Launch Model 2 on GPU 1
-nohup /home/AQ44130/miniconda3/envs/rsna-knee/bin/python -u scripts/24_train_parallel_2gpu_finetune.py \
+nohup python -u scripts/24_train_parallel_2gpu_finetune.py \
     --backbone_name "${MODEL2}" \
     --device "cuda:1" \
     --epochs ${EPOCHS} \
@@ -67,6 +67,6 @@ echo "==========================================================================
 echo "📊 MONITORING INSTRUCTIONS:"
 echo "  • Monitor GPU 0 Log: tail -f artifacts/experiments/phase_09_parallel_finetune/logs/gpu0_${MODEL1//\//_}.log"
 echo "  • Monitor GPU 1 Log: tail -f artifacts/experiments/phase_09_parallel_finetune/logs/gpu1_${MODEL2//\//_}.log"
-echo "  • Run Monitor UI:    /home/AQ44130/miniconda3/envs/rsna-knee/bin/python scripts/monitor_parallel_training.py"
+echo "  • Run Monitor UI:    python scripts/monitor_parallel_training.py"
 echo "  • Watch GPU compute: watch -n 2 nvidia-smi"
 echo "======================================================================================"

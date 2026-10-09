@@ -4,9 +4,9 @@
 # Sequential training of Folds 0, 1, 2 on RTX A6000 GPU 1
 # ==============================================================================
 set -euo pipefail
-PYTHON="/home/AQ44130/miniconda3/envs/rsna-knee/bin/python"
+PYTHON="python"
 
-for FOLD in 0 1 2; do
+for FOLD in 1 2; do
     CKPT="checkpoints/phase17_decoupled_t2_convnext_small_384px_f${FOLD}_best.pth"
     PREDS="checkpoints/phase17_decoupled_t2_convnext_small_384px_f${FOLD}_val_preds.npy"
 

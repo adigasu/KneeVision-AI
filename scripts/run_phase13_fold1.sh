@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-PY="/home/AQ44130/miniconda3/envs/rsna-knee/bin/python"
+PY="python"
 
 echo "=== Launching Phase 13 Fold 1 Tri-Planar Models ==="
 
