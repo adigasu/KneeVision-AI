@@ -56,7 +56,7 @@ class PlaneDecoupledTriPlanarMILModel(nn.Module):
             self.backbone = clip_model.visual
             self.num_features = 512
         elif backbone_name.lower() in ("orthofoundation", "orthofoundation_vitl"):
-            import timm, os
+            import os
             self.backbone = timm.create_model('vit_large_patch16_224', pretrained=False, num_classes=0, img_size=224, dynamic_img_size=True)
             ckpt_path = 'weights/orthofoundation/OrthoFoundation-L.pth'
             if os.path.exists(ckpt_path):
