@@ -22,7 +22,7 @@ def run_verification():
     console = Console()
     console.print("[bold blue]=== RSNA Knee: Multi-Contrast (T1 + T2 FS) Fold 0 Gain Verification ===[/bold blue]")
 
-    t2_path = "checkpoints/phase16_decoupled_convnext_small_384px_f0_val_preds.npy"
+    t2_path = "checkpoints/phase17_decoupled_t2_convnext_small_384px_f0_val_preds.npy"
     t1_path = "checkpoints/phase17_decoupled_t1_convnext_small_384px_f0_val_preds.npy"
 
     if not os.path.exists(t1_path):
@@ -33,7 +33,7 @@ def run_verification():
     p_t1 = np.load(t1_path)
 
     # Load targets for Fold 0
-    df_splits = pd.read_parquet("data/splits_5fold.parquet")
+    df_splits = pd.read_parquet("data/splits_3fold.parquet")
     df_dense = pd.read_parquet("data/dense_labels_master.parquet")
 
     df_f0 = df_splits[df_splits["fold"] == 0].reset_index(drop=True)
