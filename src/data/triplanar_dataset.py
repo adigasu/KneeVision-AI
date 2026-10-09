@@ -1,8 +1,10 @@
 """
-RSNA Knee Abnormality Detection - Tri-Planar Multi-View PyTorch Dataset (Phase 13).
-Simultaneously loads aligned Sagittal, Coronal, and Axial 2.5D MRI volumes per study (48 slices total: 16 Sag + 16 Cor + 16 Ax)
-with learned plane embeddings, sequence priority matching (Fluid-Sensitive & Fat-Suppressed first),
-and 12-target Tri-State / Consensus-Denoised label loading.
+RSNA Knee Abnormality Detection - Tri-Planar & Multi-Contrast PyTorch Dataset.
+Simultaneously loads aligned Sagittal, Coronal, and Axial 2.5D MRI volumes per study.
+Supports:
+- contrast_mode="t2_only": 3 planes of Fluid-Sensitive / Fat-Suppressed T2 series (default, Phase 16)
+- contrast_mode="t1_only": 3 planes of Non-Fluid / Non-FS T1 Anatomical series
+- contrast_mode="dual": 6 streams (Sag T2, Sag T1, Cor T2, Cor T1, Ax T2, Ax T1)
 """
 
 import os
@@ -18,11 +20,10 @@ from src.data.dataset import load_dataframe_auto
 
 class TriPlanarKneeDataset(Dataset):
     """
-    Simultaneous 3-view dataset for Knee MRI:
-    - Sagittal: 16 slices (plane 0)
-    - Coronal:  16 slices (plane 1)
-    - Axial:    16 slices (plane 2)
-    Total: 48 slices per study of shape (48, 3, H, W).
+    Multi-View Multi-Contrast Dataset for Knee MRI:
+    - contrast_mode="t2_only": (3 * slices_per_plane, 3, H, W)
+    - contrast_mode="t1_only": (3 * slices_per_plane, 3, H, W)
+    - contrast_mode="dual":    (6 * slices_per_plane, 3, H, W)
     """
 
     PLANES = ["Sagittal", "Coronal", "Axial"]
@@ -34,6 +35,7 @@ class TriPlanarKneeDataset(Dataset):
         slices_per_plane: int = 16,
         transforms: Optional[Callable] = None,
         is_training: bool = False,
+        contrast_mode: str = "t2_only",
     ):
         self.df = load_dataframe_auto(df).reset_index(drop=True)
         if cache_dir is None:
@@ -45,12 +47,23 @@ class TriPlanarKneeDataset(Dataset):
 
         self.cache_dir = cache_dir
         self.slices_per_plane = slices_per_plane
-        self.total_slices = slices_per_plane * 3
         self.transforms = transforms
         self.is_training = is_training
+        self.contrast_mode = contrast_mode.lower()
 
-        # Precompute lookup for (StudyInstanceUID, Anatomical_Plane) -> cache_path
-        # Prioritizing: Fluid_Sensitive=1, Fat_Suppression=1, num_slices desc
+        if self.contrast_mode == "dual":
+            self.total_slices = slices_per_plane * 6
+        else:
+            self.total_slices = slices_per_plane * 3
+
+        # 1. Try fast dual-sequence index lookup
+        dual_index_file = os.path.join(os.path.dirname(self.cache_dir), "dual_sequence_index.parquet")
+        self.dual_index: Dict[str, Dict[str, Any]] = {}
+        if os.path.exists(dual_index_file):
+            d_df = pd.read_parquet(dual_index_file).set_index("StudyInstanceUID")
+            self.dual_index = d_df.to_dict(orient="index")
+
+        # 2. Fallback preprocessed_index lookup
         manifest_parquet = os.path.join(os.path.dirname(self.cache_dir), "preprocessed_index.parquet")
         self.lookup: Dict[Tuple[str, str], str] = {}
         if os.path.exists(manifest_parquet):
@@ -65,17 +78,22 @@ class TriPlanarKneeDataset(Dataset):
     def __len__(self) -> int:
         return len(self.df)
 
-    def _resolve_plane_path(self, study_uid: str, plane: str) -> Optional[str]:
-        # Fast dictionary lookup
-        key = (study_uid, plane)
-        if key in self.lookup:
-            cand = self.lookup[key]
-            if os.path.exists(cand):
-                return cand
-            # If relative path
-            alt = os.path.join(os.path.dirname(self.cache_dir), cand) if not cand.startswith("/") else cand
-            if os.path.exists(alt):
-                return alt
+    def _resolve_path_from_dual(self, study_uid: str, plane: str, contrast: str) -> Optional[str]:
+        if study_uid in self.dual_index:
+            p_prefix = "ax" if plane == "Axial" else plane.lower()[:3]
+            c_prefix = "t2" if contrast == "t2" else "t1"
+            col_name = f"{c_prefix}_{p_prefix}_path"
+            path = self.dual_index[study_uid].get(col_name)
+            if path is not None and isinstance(path, str) and len(path) > 0 and os.path.exists(path):
+                return path
+
+        # Fallback for t2
+        if contrast == "t2":
+            key = (study_uid, plane)
+            if key in self.lookup:
+                cand = self.lookup[key]
+                if os.path.exists(cand):
+                    return cand
 
         # Fallback to study directory inspection
         study_dir = os.path.join(self.cache_dir, study_uid)
@@ -141,16 +159,32 @@ class TriPlanarKneeDataset(Dataset):
         plane_tensors = []
         plane_masks = []
         plane_id_list = []
+        contrast_id_list = []
 
-        for p_idx, plane in enumerate(self.PLANES):
-            path = self._resolve_plane_path(study_uid, plane)
-            plane_tensor, is_valid = self._load_plane_slices(path)
-            plane_tensors.append(plane_tensor)
-            plane_masks.extend([is_valid] * self.slices_per_plane)
-            plane_id_list.extend([p_idx] * self.slices_per_plane)
+        if self.contrast_mode == "dual":
+            # 6 streams: Sag T2, Sag T1, Cor T2, Cor T1, Ax T2, Ax T1
+            for p_idx, plane in enumerate(self.PLANES):
+                for c_idx, contrast in enumerate(["t2", "t1"]):
+                    path = self._resolve_path_from_dual(study_uid, plane, contrast)
+                    tensor, is_valid = self._load_plane_slices(path)
+                    plane_tensors.append(tensor)
+                    plane_masks.extend([is_valid] * self.slices_per_plane)
+                    plane_id_list.extend([p_idx] * self.slices_per_plane)
+                    contrast_id_list.extend([c_idx] * self.slices_per_plane)
+        else:
+            contrast_target = "t1" if self.contrast_mode == "t1_only" else "t2"
+            c_id = 0 if self.contrast_mode == "t1_only" else 1
+            for p_idx, plane in enumerate(self.PLANES):
+                path = self._resolve_path_from_dual(study_uid, plane, contrast_target)
+                tensor, is_valid = self._load_plane_slices(path)
+                plane_tensors.append(tensor)
+                plane_masks.extend([is_valid] * self.slices_per_plane)
+                plane_id_list.extend([p_idx] * self.slices_per_plane)
+                contrast_id_list.extend([c_id] * self.slices_per_plane)
 
         images = torch.cat(plane_tensors, dim=0)
         plane_ids = torch.tensor(plane_id_list, dtype=torch.long)
+        contrast_ids = torch.tensor(contrast_id_list, dtype=torch.long)
         mask = torch.tensor(plane_masks, dtype=torch.bool)
 
         hard_vals = [
@@ -165,21 +199,24 @@ class TriPlanarKneeDataset(Dataset):
 
         is_gold = bool(row["is_gold"]) if "is_gold" in row and pd.notnull(row["is_gold"]) else False
 
-        return {
+        out = {
             "study_uid": study_uid,
-            "images": images,                         # (48, 3, H, W)
-            "plane_ids": plane_ids,                   # (48,)
-            "mask": mask,                             # (48,)
+            "images": images,
+            "plane_ids": plane_ids,
+            "contrast_ids": contrast_ids,
+            "mask": mask,
             "hard_targets": torch.tensor(hard_vals, dtype=torch.float32),
             "soft_targets": torch.tensor(soft_vals, dtype=torch.float32),
             "is_gold": is_gold,
         }
+        return out
 
 
 def triplanar_collate(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     images = torch.stack([b["images"] for b in batch])
     plane_ids = torch.stack([b["plane_ids"] for b in batch])
     mask = torch.stack([b["mask"] for b in batch])
+    contrast_ids = torch.stack([b["contrast_ids"] for b in batch])
     hard_targets = torch.stack([b["hard_targets"] for b in batch])
     soft_targets = torch.stack([b["soft_targets"] for b in batch])
     study_uids = [b["study_uid"] for b in batch]
@@ -188,6 +225,7 @@ def triplanar_collate(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "images": images,
         "plane_ids": plane_ids,
+        "contrast_ids": contrast_ids,
         "mask": mask,
         "hard_targets": hard_targets,
         "soft_targets": soft_targets,
