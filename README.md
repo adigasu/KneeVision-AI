@@ -5,11 +5,11 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/pytest-17%20passed-brightgreen.svg)](tests/)
 [![Kaggle Public LB](https://img.shields.io/badge/Kaggle%20LB-~0.930-gold.svg)](https://www.kaggle.com)
-[![CV Peak Macro AUC](https://img.shields.io/badge/CV%20Peak%20Macro%20AUC-0.8843-blueviolet.svg)](docs/experimentation_log.md)
+[![CV Peak Macro AUC](https://img.shields.io/badge/CV%20Peak%20Macro%20AUC-0.8843-blueviolet.svg)](https://github.com/adigasu/KneeVision-AI#-master-experimentation--kaggle-leaderboard)
 
 An end-to-end deep learning and multimodal foundation model framework for the **RSNA Knee Abnormality Detection** challenge.
 
-This repository is engineered for both **competitive performance** (Kaggle Public Leaderboard **~0.930**, CV Peak **0.8843**) and **systematic research and engineering mastery** (tracked in [`skills.md`](skills.md), [`docs/experimentation_log.md`](docs/experimentation_log.md), and [`artifacts/master_experiment_results.md`](artifacts/master_experiment_results.md)).
+This repository is engineered for both **competitive performance** (Kaggle Public Leaderboard **~0.930**, CV Peak **0.8843**) and **systematic learning of research and engineering skills** (tracked in [`skills.md`](skills.md)).
 
 ---
 
@@ -85,23 +85,21 @@ $$\text{Macro AUC} = \frac{1}{12} \sum_{c=1}^{12} \text{AUC}_c$$
 
 ## 🏆 Master Experimentation & Kaggle Leaderboard
 
-Full experiment logs and ablation details are tracked in [`docs/experimentation_log.md`](docs/experimentation_log.md) and [`artifacts/master_experiment_results.md`](artifacts/master_experiment_results.md).
-
 | Phase / Exp ID | Architecture | Resolution | Modality / Sequences | Loss Function | **Validation Macro AUC** | **Kaggle Public LB** | Status |
 |:---|:---|:---:|:---|:---|:---:|:---:|:---:|
 | **EXP-001** | `convnext_tiny` + Gated MIL | 256px | 2.5D Sagittal | Asymmetric Loss (ASL) | 0.5600 | — | Completed |
 | **EXP-002** | `convnext_tiny` + Gated MIL | 256px | Weak Multimodal (BETO InfoNCE) | Asymmetric Loss (ASL) | 0.5252 | — | Completed |
 | **EXP-004** | `resnet34` + Gated MIL | 256px | 2.5D Sagittal (Full Cohort) | Masked BCE (Tri-State) | 0.7444 | — | Completed |
-| **SUB-001 (v13)** | `convnext_tiny` (Single, 8 ep) | 288px | 2.5D Sagittal | Soft BCE | 0.7710 | **0.654** | Completed |
-| **SUB-002 (v16)** | **5-Fold `convnext_tiny` Ensemble** | 288px | 2.5D Sagittal (25 ep) | Soft BCE | **0.8158** (Gold: 0.8606) | **`0.694`** ⭐ | **Submitted** |
-| **SUB-003 (v20)** | **`convnext_small` (50M)** | 320px | 2.5D Sagittal (320px) | Soft BCE | **0.8367** (Gold: 0.9172) | **`0.697`** 🏆 | **Submitted** |
+| **SUB-001 (v13)** | `convnext_tiny` (Single, 8 ep) | 288px | 2.5D Sagittal | Soft BCE | 0.7710 | 0.654 | Completed |
+| **SUB-002 (v16)** | **5-Fold `convnext_tiny` Ensemble** | 288px | 2.5D Sagittal (25 ep) | Soft BCE | 0.8158 (Gold: 0.8606) | 0.694 | Submitted |
+| **SUB-003 (v20)** | **`convnext_small` (50M)** | 320px | 2.5D Sagittal (320px) | Soft BCE | 0.8367 (Gold: 0.9172) | 0.697 | Submitted |
 | **EXP-009** | `dinov2_small` + 12-Branch MIL | 280px | 2.5D Sagittal (32 slices) | Mixed Convex Loss ($\alpha=0.7$) | 0.8187 | — | Completed |
-| **EXP-013** | **Multi-Backbone Fusion Ensemble** | 280–320px | ConvNeXt-T + Small + DINOv2 | Multi-Tier Soft + Gold Weighted | **0.8483** (Gold: 0.8753) | — | Completed |
-| **Phase 13** | **Tri-Planar Multi-View MIL (ConvNeXt-Tiny/Small)** | 288px | Sagittal + Coronal + Axial (72 sl) | Soft Consensus BCE | **0.8684** (Gold: 0.9117) | **~0.880–0.900** | Completed |
-| **Phase 16 (Single)** | **Decoupled ConvNeXt-Tiny & Small (384px)** | 336–384px | Decoupled Tri-Planar T2 FS (1-Fold) | Bottleneck Denoised BCE | **0.8752** (Gold: 0.9210) | **`0.920`** 🎯 | Submitted |
-| **Phase 16 (3-Fold)** | **Decoupled ConvNeXt-Small 384px (3-Fold Blend)** | 384px | Decoupled Tri-Planar T2 FS | Logit-Space Stacking | **0.8785** (Gold: 0.9260) | **`0.925`** 🚀 | Submitted |
-| **Phase 16 (5-Fold)** | **5-Fold Decoupled ConvNeXt-Small 384px + Tiny Blend** | 384px | Decoupled Tri-Planar T2 FS (Full 5-Fold) | Optimal Decoupled Ensembling | **0.8810** (Gold: 0.9320) | **`~0.930`** ⭐ | **Current SOTA (T2)** |
-| **Phase 17 (Active)** | **Multi-Contrast T1 + T2 FS Decoupled Ensemble** | 384px | T1 Anatomical + T2 Fluid-Sensitive | Contrast-Decoupled Optimization | **`0.8843`** (Gold: **0.9250**) | *Targeting 0.950+* | **Active SOTA Pipeline** |
+| **EXP-013** | **Multi-Backbone Fusion Ensemble** | 280–320px | ConvNeXt-T + Small + DINOv2 | Multi-Tier Soft + Gold Weighted | 0.8483 (Gold: 0.8753) | — | Completed |
+| **Phase 13** | **Tri-Planar Multi-View MIL (ConvNeXt-Tiny/Small)** | 288px | Sagittal + Coronal + Axial (72 sl) | Soft Consensus BCE | 0.8684 (Gold: 0.9117) | ~0.880–0.900 | Completed |
+| **Phase 16 (Single)** | **Decoupled ConvNeXt-Tiny & Small (384px)** | 336–384px | Decoupled Tri-Planar T2 FS (1-Fold) | Bottleneck Denoised BCE | 0.8752 (Gold: 0.9210) | 0.920 | Submitted |
+| **Phase 16 (3-Fold)** | **Decoupled ConvNeXt-Small 384px (3-Fold Blend)** | 384px | Decoupled Tri-Planar T2 FS | Logit-Space Stacking | 0.8785 (Gold: 0.9260) | 0.925 🚀 | Submitted |
+| **Phase 16 (5-Fold)** | **5-Fold Decoupled ConvNeXt-Small 384px + Tiny Blend** | 384px | Decoupled Tri-Planar T2 FS (Full 5-Fold) | Optimal Decoupled Ensembling | **0.8810** (Gold: **0.9320**) | **~0.930** ⭐ | **Current SOTA (T2)** |
+| **Phase 17 (1-Fold)** | **Multi-Contrast T1 + T2 FS Decoupled Ensemble** | 384px | T1 Anatomical + T2 Fluid-Sensitive | Contrast-Decoupled Optimization | **0.8843** (Gold: 0.9250) | 0.920 | Submitted (T1+T2) |
 
 ---
 
@@ -210,12 +208,6 @@ KneeVision-AI/
 │   ├── ensemble_weights.json
 │   ├── phase13_pathology_weights.json
 │   └── phase17_3fold_ensemble_summary.json
-│
-├── docs/                     # Comprehensive technical documentation
-│   ├── experimentation_log.md           # Live experimentation leaderboard
-│   ├── submission_strategy.md           # Submission roadmap & assumption audit
-│   ├── data_analysis_and_architecture_guide.md # 2.5D vs 3D mathematical rationale
-│   └── multi_backbone_ensemble_and_fusion_guide.md
 │
 ├── kaggle_kernel/            # Self-contained Kaggle submission notebooks & engines
 │   ├── submission_pipeline.py
