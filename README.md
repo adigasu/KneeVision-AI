@@ -4,12 +4,12 @@
 [![Python](https://img.shields.io/badge/Python->=3.9-3776AB.svg?style=flat&logo=python)](https://www.python.org)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/pytest-17%20passed-brightgreen.svg)](tests/)
-[![Kaggle Public LB](https://img.shields.io/badge/Kaggle%20LB-~0.930-gold.svg)](https://www.kaggle.com)
+[![Kaggle Public LB](https://img.shields.io/badge/Kaggle%20LB-0.939-gold.svg)](https://www.kaggle.com)
 [![CV Peak Macro AUC](https://img.shields.io/badge/CV%20Peak%20Macro%20AUC-0.8843-blueviolet.svg)](https://github.com/adigasu/KneeVision-AI#-master-experimentation--kaggle-leaderboard)
 
 An end-to-end deep learning and multimodal foundation model framework for the **RSNA Knee Abnormality Detection** challenge.
 
-This repository is engineered for both **competitive performance** (Kaggle Public Leaderboard **~0.930**, CV Peak **0.8843**) and **systematic learning of research and engineering skills** (tracked in [`skills.md`](skills.md)).
+This repository is engineered for both **competitive performance** (Kaggle Public Leaderboard **0.939**, CV Peak **0.8843**) and **systematic learning of research and engineering skills** (tracked in [`skills.md`](skills.md)).
 
 ---
 
@@ -98,8 +98,10 @@ $$\text{Macro AUC} = \frac{1}{12} \sum_{c=1}^{12} \text{AUC}_c$$
 | **Phase 13** | **Tri-Planar Multi-View MIL (ConvNeXt-Tiny/Small)** | 288px | Sagittal + Coronal + Axial (72 sl) | Soft Consensus BCE | 0.8684 (Gold: 0.9117) | ~0.880–0.900 | Completed |
 | **Phase 16 (Single)** | **Decoupled ConvNeXt-Tiny & Small (384px)** | 336–384px | Decoupled Tri-Planar T2 FS (1-Fold) | Bottleneck Denoised BCE | 0.8752 (Gold: 0.9210) | 0.920 | Submitted |
 | **Phase 16 (3-Fold)** | **Decoupled ConvNeXt-Small 384px (3-Fold Blend)** | 384px | Decoupled Tri-Planar T2 FS | Logit-Space Stacking | 0.8785 (Gold: 0.9260) | 0.925 🚀 | Submitted |
-| **Phase 16 (5-Fold)** | **5-Fold Decoupled ConvNeXt-Small 384px + Tiny Blend** | 384px | Decoupled Tri-Planar T2 FS (Full 5-Fold) | Optimal Decoupled Ensembling | **0.8810** (Gold: **0.9320**) | **~0.930** ⭐ | **Current SOTA (T2)** |
+| **Phase 16 (5-Fold)** | **5-Fold Decoupled ConvNeXt-Small 384px + Tiny Blend** | 384px | Decoupled Tri-Planar T2 FS (Full 5-Fold) | Optimal Decoupled Ensembling | **0.8810** (Gold: **0.9320**) | ~0.930 ⭐ | Completed |
 | **Phase 17 (1-Fold)** | **Multi-Contrast T1 + T2 FS Decoupled Ensemble** | 384px | T1 Anatomical + T2 Fluid-Sensitive | Contrast-Decoupled Optimization | **0.8843** (Gold: 0.9250) | 0.920 | Submitted (T1+T2) |
+| **Phase 18 (5-Fold)** | **5-Fold Decoupled ConvNeXt-Small 384px Consensus Ensemble** | 384px | Decoupled Tri-Planar T2 FS (Full 5-Fold) | Label-Smoothed BCE + Gold Upweighting | **0.8807** (Gold: **0.9163**) | 0.938 | Completed (v65) |
+| **Phase 19 (Top-3)** | **Top-3 Consensus ConvNeXt-Small 384px Ensemble (Folds 0, 1, 3)** | 384px | Decoupled Tri-Planar T2 FS (Top-3 Consensus) | Label-Smoothed BCE + Gold Upweighting | **0.8856** (Gold: **0.9225**) | **0.939** 🏆 | **New All-Time SOTA (v66)** |
 
 ---
 
