@@ -40,6 +40,9 @@ class PlaneDecoupledTriPlanarMILModel(nn.Module):
         in_chans: int = 3,
         chunk_size: int = 32,
         slices_per_plane: int = 24,
+        slices_sag: Optional[int] = None,
+        slices_cor: Optional[int] = None,
+        slices_ax: Optional[int] = None,
         classifier_type: str = "multi_head_mlp",
         head_hidden_dim: int = 256,
     ):
@@ -48,6 +51,9 @@ class PlaneDecoupledTriPlanarMILModel(nn.Module):
         self.num_classes = num_classes
         self.chunk_size = chunk_size
         self.slices_per_plane = slices_per_plane
+        self.slices_sag = slices_sag if slices_sag is not None else slices_per_plane
+        self.slices_cor = slices_cor if slices_cor is not None else slices_per_plane
+        self.slices_ax = slices_ax if slices_ax is not None else slices_per_plane
 
         extra_kwargs = {}
         if backbone_name.lower() == "biomedclip":
@@ -210,19 +216,21 @@ class PlaneDecoupledTriPlanarMILModel(nn.Module):
                 attn_ax:  (B, 12, 24)
         """
         B, D, C, H, W = images.shape
-        S = self.slices_per_plane
+        s_sag = self.slices_sag
+        s_cor = self.slices_cor
+        s_ax = self.slices_ax
 
-        # 1. Extract slice features: (B, 72, F)
+        # 1. Extract slice features: (B, D, F)
         slice_feats = self.extract_slice_features(images)
 
-        # 2. Slice decoupling
-        sag_feats = slice_feats[:, :S]
-        cor_feats = slice_feats[:, S : 2 * S]
-        ax_feats = slice_feats[:, 2 * S : 3 * S]
+        # 2. Slice decoupling (supports both symmetric S x 3 and asymmetric s_sag + s_cor + s_ax)
+        sag_feats = slice_feats[:, :s_sag]
+        cor_feats = slice_feats[:, s_sag : s_sag + s_cor]
+        ax_feats = slice_feats[:, s_sag + s_cor : s_sag + s_cor + s_ax]
 
-        sag_mask = mask[:, :S] if mask is not None else None
-        cor_mask = mask[:, S : 2 * S] if mask is not None else None
-        ax_mask = mask[:, 2 * S : 3 * S] if mask is not None else None
+        sag_mask = mask[:, :s_sag] if mask is not None else None
+        cor_mask = mask[:, s_sag : s_sag + s_cor] if mask is not None else None
+        ax_mask = mask[:, s_sag + s_cor : s_sag + s_cor + s_ax] if mask is not None else None
 
         # 3. Independent Intra-Plane Pooling
         # Note: pool forward returns (logits_unused, attn, study_embed)
