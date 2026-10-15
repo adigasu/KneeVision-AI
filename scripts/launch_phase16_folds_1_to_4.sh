@@ -1,9 +1,7 @@
 #!/bin/bash
 set -e
 
-PYTHON="python"
-WORKDIR="/data/users/sukesh/KneeVision-AI"
-cd $WORKDIR
+PYTHON="${PYTHON:-python}"
 
 mkdir -p logs checkpoints
 
