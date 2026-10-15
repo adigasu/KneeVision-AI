@@ -33,6 +33,9 @@ class TriPlanarKneeDataset(Dataset):
         df: Union[pd.DataFrame, str],
         cache_dir: Optional[str] = None,
         slices_per_plane: int = 16,
+        slices_sag: Optional[int] = None,
+        slices_cor: Optional[int] = None,
+        slices_ax: Optional[int] = None,
         transforms: Optional[Callable] = None,
         is_training: bool = False,
         contrast_mode: str = "t2_only",
@@ -47,14 +50,18 @@ class TriPlanarKneeDataset(Dataset):
 
         self.cache_dir = cache_dir
         self.slices_per_plane = slices_per_plane
+        self.slices_sag = slices_sag if slices_sag is not None else slices_per_plane
+        self.slices_cor = slices_cor if slices_cor is not None else slices_per_plane
+        self.slices_ax = slices_ax if slices_ax is not None else slices_per_plane
         self.transforms = transforms
         self.is_training = is_training
         self.contrast_mode = contrast_mode.lower()
 
+        plane_slice_sum = self.slices_sag + self.slices_cor + self.slices_ax
         if self.contrast_mode == "dual":
-            self.total_slices = slices_per_plane * 6
+            self.total_slices = plane_slice_sum * 2
         else:
-            self.total_slices = slices_per_plane * 3
+            self.total_slices = plane_slice_sum
 
         # 1. Try fast dual-sequence index lookup
         dual_index_file = os.path.join(os.path.dirname(self.cache_dir), "dual_sequence_index.parquet")
@@ -103,33 +110,34 @@ class TriPlanarKneeDataset(Dataset):
                 return os.path.join(study_dir, npy_files[0])
         return None
 
-    def _load_plane_slices(self, path: Optional[str]) -> Tuple[torch.Tensor, bool]:
+    def _load_plane_slices(self, path: Optional[str], target_slices: Optional[int] = None) -> Tuple[torch.Tensor, bool]:
         """
         Loads (D, 3, H, W) for one plane.
         Returns:
-            slices_tensor: (slices_per_plane, 3, H, W)
+            slices_tensor: (target_slices, 3, H, W)
             is_valid: bool (True if loaded from real cache, False if dummy zero-filled)
         """
+        n_slices = target_slices if target_slices is not None else self.slices_per_plane
         if path is None or not os.path.exists(path):
-            dummy = torch.zeros((self.slices_per_plane, 3, 288, 288), dtype=torch.float32)
+            dummy = torch.zeros((n_slices, 3, 288, 288), dtype=torch.float32)
             return dummy, False
 
         try:
             vol = np.load(path)  # (D, 3, H, W)
         except Exception:
-            dummy = torch.zeros((self.slices_per_plane, 3, 288, 288), dtype=torch.float32)
+            dummy = torch.zeros((n_slices, 3, 288, 288), dtype=torch.float32)
             return dummy, False
 
-        # Resample depth to slices_per_plane
+        # Resample depth to target_slices
         cur_d = vol.shape[0]
-        if cur_d != self.slices_per_plane:
-            indices = np.linspace(0, cur_d - 1, self.slices_per_plane).round().astype(int)
+        if cur_d != n_slices:
+            indices = np.linspace(0, cur_d - 1, n_slices).round().astype(int)
             vol = vol[indices]
 
         # Apply transforms volume-consistently across slices of this plane
         transformed = []
         replay_dict = None
-        for s in range(self.slices_per_plane):
+        for s in range(n_slices):
             img = vol[s].transpose(1, 2, 0)  # (H, W, 3)
             if self.transforms is not None:
                 if hasattr(self.transforms, "replay") and hasattr(self.transforms, "__call__"):
@@ -161,26 +169,34 @@ class TriPlanarKneeDataset(Dataset):
         plane_id_list = []
         contrast_id_list = []
 
+        plane_slice_counts = {
+            0: self.slices_sag,  # Sagittal
+            1: self.slices_cor,  # Coronal
+            2: self.slices_ax,   # Axial
+        }
+
         if self.contrast_mode == "dual":
             # 6 streams: Sag T2, Sag T1, Cor T2, Cor T1, Ax T2, Ax T1
             for p_idx, plane in enumerate(self.PLANES):
+                n_sl = plane_slice_counts[p_idx]
                 for c_idx, contrast in enumerate(["t2", "t1"]):
                     path = self._resolve_path_from_dual(study_uid, plane, contrast)
-                    tensor, is_valid = self._load_plane_slices(path)
+                    tensor, is_valid = self._load_plane_slices(path, target_slices=n_sl)
                     plane_tensors.append(tensor)
-                    plane_masks.extend([is_valid] * self.slices_per_plane)
-                    plane_id_list.extend([p_idx] * self.slices_per_plane)
-                    contrast_id_list.extend([c_idx] * self.slices_per_plane)
+                    plane_masks.extend([is_valid] * n_sl)
+                    plane_id_list.extend([p_idx] * n_sl)
+                    contrast_id_list.extend([c_idx] * n_sl)
         else:
             contrast_target = "t1" if self.contrast_mode == "t1_only" else "t2"
             c_id = 0 if self.contrast_mode == "t1_only" else 1
             for p_idx, plane in enumerate(self.PLANES):
+                n_sl = plane_slice_counts[p_idx]
                 path = self._resolve_path_from_dual(study_uid, plane, contrast_target)
-                tensor, is_valid = self._load_plane_slices(path)
+                tensor, is_valid = self._load_plane_slices(path, target_slices=n_sl)
                 plane_tensors.append(tensor)
-                plane_masks.extend([is_valid] * self.slices_per_plane)
-                plane_id_list.extend([p_idx] * self.slices_per_plane)
-                contrast_id_list.extend([c_id] * self.slices_per_plane)
+                plane_masks.extend([is_valid] * n_sl)
+                plane_id_list.extend([p_idx] * n_sl)
+                contrast_id_list.extend([c_id] * n_sl)
 
         images = torch.cat(plane_tensors, dim=0)
         plane_ids = torch.tensor(plane_id_list, dtype=torch.long)
