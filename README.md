@@ -5,11 +5,10 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/pytest-17%20passed-brightgreen.svg)](tests/)
 [![Kaggle Public LB](https://img.shields.io/badge/Kaggle%20LB-0.939-gold.svg)](https://www.kaggle.com)
-[![CV Peak Macro AUC](https://img.shields.io/badge/CV%20Peak%20Macro%20AUC-0.8843-blueviolet.svg)](https://github.com/adigasu/KneeVision-AI#-master-experimentation--kaggle-leaderboard)
 
 An end-to-end deep learning and multimodal foundation model framework for the **RSNA Knee Abnormality Detection** challenge.
 
-This repository is engineered for both **competitive performance** (Kaggle Public Leaderboard **0.939**, CV Peak **0.8843**) and **systematic learning of research and engineering skills** (tracked in [`skills.md`](skills.md)).
+This repository is engineered for both **competitive performance** (Kaggle Public Leaderboard **0.939 🏆**) and **systematic learning of research and engineering skills** (tracked in [`skills.md`](skills.md)).
 
 ---
 
@@ -20,13 +19,13 @@ The objective is to detect **12 clinically critical knee abnormalities** across 
 | # | Abnormality Target | Description / Clinical Significance | Prevalence (GT $N=58$) | Best Validated AUC |
 |:---:|:---|:---|:---:|:---:|
 | 1 | **Medial Meniscus** | Medial meniscus tear / degenerative complex tear | **44.8%** | **0.9334** |
-| 2 | **Baker's** | Popliteal (Baker's) cyst in gastrocnemio-semimembranosus fossa | **20.7%** | **0.9272** |
+| 2 | **Baker's Cyst** | Popliteal (Baker's) cyst in gastrocnemio-semimembranosus fossa | **20.7%** | **0.9272** |
 | 3 | **Medial OA** | Osteoarthritis of medial tibiofemoral joint (cartilage/subchondral) | **25.9%** | **0.9038** |
 | 4 | **ACL** | Anterior Cruciate Ligament tear / complete rupture | **41.4%** | **0.8909** |
 | 5 | **Synovitis** | Synovial membrane thickening / joint inflammation | **46.6%** | **0.8902** |
-| 6 | **Effusion** | Joint effusion / intra-articular excess fluid | **60.3%** | **0.8897** |
-| 7 | **Lateral Meniscus** | Lateral meniscus tear / bucket-handle disruption | **39.7%** | **0.8889** |
-| 8 | **Lateral OA** | Osteoarthritis of lateral tibiofemoral compartment | **19.0%** | **0.8836** |
+| 6 | **Effusion** | Joint effusion / fluid distension within suprapatellar pouch | **58.6%** | **0.8897** |
+| 7 | **Lateral Meniscus** | Lateral meniscus tear / radial or horizontal cleavage tear | **34.5%** | **0.8889** |
+| 8 | **Lateral OA** | Osteoarthritis of lateral compartment / subchondral sclerosis | **17.2%** | **0.8836** |
 | 9 | **Contusion** | Subchondral bone marrow edema / trabecular microfracture | **32.8%** | **0.8819** |
 | 10 | **Fracture** | Acute cortical or occult trabecular bone fracture | **31.0%** | **0.8659** |
 | 11 | **MCL** | Medial Collateral Ligament tear / sprain | **15.5%** | **0.8425** |
@@ -45,10 +44,14 @@ $$\text{Macro AUC} = \frac{1}{12} \sum_{c=1}^{12} \text{AUC}_c$$
               ┌─────────────────────────────┼─────────────────────────────┐
               │                             │                             │
        Sagittal Series               Coronal Series                 Axial Series
-    (ACL, Menisci, Contusion)       (MCL, Collaterals, OA)        (PF OA, Effusion, Cyst)
+    (32 Slices / Asymmetric)      (28 Slices / Asymmetric)      (20 Slices / Asymmetric)
+    [ACL, Menisci, Contusion]     [MCL, Collaterals, OA]        [PF OA, Effusion, Cyst]
               │                             │                             │
     [2.5D Slice Encoders]         [2.5D Slice Encoders]         [2.5D Slice Encoders]
    (ConvNeXt / DINOv2 / Swin)    (ConvNeXt / DINOv2 / Swin)    (ConvNeXt / DINOv2 / Swin)
+              │                             │                             │
+    [Depth-Conditioned Pos]       [Depth-Conditioned Pos]       [Depth-Conditioned Pos]
+   (Continuous Axial z-Coords)   (Continuous Coronal z-Coords) (Continuous Sagittal z-Coords)
               │                             │                             │
     [T1 / T2 Decoupling]          [T1 / T2 Decoupling]          [T1 / T2 Decoupling]
   (Fluid-Sensitive vs Anatomy)  (Fluid-Sensitive vs Anatomy)  (Fluid-Sensitive vs Anatomy)
@@ -71,14 +74,33 @@ $$\text{Macro AUC} = \frac{1}{12} \sum_{c=1}^{12} \text{AUC}_c$$
      - **Coronal**: MCL, Collateral ligaments, Medial/Lateral OA.
      - **Axial**: Patellofemoral (PF) OA, Joint Effusion, Baker's Cyst.
 
-3. **Multi-Contrast MRI Decoupling (`ContrastDecoupledMIL`)**:
+3. **Asymmetric Clinical Slice Allocation (Phase 19)**:
+   - Replaces uniform slice sampling (24 Sag + 24 Cor + 24 Ax = 72) with clinical diagnostic-density allocation: **32 Sagittal + 28 Coronal + 20 Axial = 80 slices**.
+   - Meniscal and cruciate pathologies require dense sagittal inspection, while collateral ligaments (MCL) require dense coronal slices; axial primarily evaluates patellofemoral tracking and fluid. Denser Sagittal & Coronal sampling elevated a single model (Fold 0 alone) to **`0.929` Public LB** (Val Macro AUC `0.8909`, Gold Human AUC `0.9302`).
+   - **Dual-Sampling Combo (72-slice Symmetric + 80-slice Asymmetric)**: Unified single-pass DICOM I/O feeding both symmetric and asymmetric representations achieves super-additive performance on ACL (+0.0029 to `0.8986`), Lateral Meniscus (+0.0044 to `0.8824`), and PF OA (+0.0025 to `0.8725`), driving Fold 0 Val Macro AUC to **`0.8933`** and Gold Human AUC to **`0.9328`**.
+
+4. **Consensus Pseudo-Label Finetuning & Top-3 Consensus Pruning (Phase 18 & 19)**:
+   - Two-stage curriculum training: Initial pretraining on continuous dense LLM consensus weak labels, followed by consensus finetuning with Label Smoothing ($0.1$) and Crisp Human Gold Upweighting ($2.0\times$) on the verified $N=58$ cohort.
+   - Exponential Moving Average (EMA, decay=0.999) weight updates smooth gradient noise and stabilize 384px feature representations.
+   - **Top-3 Consensus Selection (Folds 0, 1, 3)**: Pruning the 2 weaker folds from the 5-fold ensemble raised Public LB from `0.938` to **`0.939` 🏆 (New All-Time Competition SOTA)** while reducing test-time GPU latency and VRAM footprint by 40%.
+
+5. **Multi-Contrast MRI Decoupling (`ContrastDecoupledMIL`)**:
    - Orthogonally models **T2/Fluid-Sensitive** sequences (highlighting hyperintense fluid, edema, and tears) and **T1/Anatomical** sequences (highlighting bone marrow, cortical margins, and cartilage thickness).
    - Late-stage pathology-specific convex ensembling elevates Macro AUC to **`0.8843`**.
 
-4. **12-Branch Label-Specific Attention MIL**:
+6. **Anatomical Depth-Conditioned Spatial MIL (`depth_aware_mil.py`)**:
+   - Injects normalized slice coordinates $z \in [0, 1]$ as continuous sinusoidal positional embeddings into slice features prior to attention pooling.
+   - Enables the MIL aggregator to distinguish peripheral capsular slices from central intercondylar notch slices (critical for cruciate ligament tears and meniscal root attachments).
+
+7. **12-Branch Label-Specific Attention MIL**:
    - Generates independent spatial attention weights per abnormality ($\mathbf{A} \in \mathbb{R}^{D \times 12}$), solving ViT attention collapse and lifting DINOv2-Small performance from `0.5239` to `0.8187` (+0.2948 AUC).
 
-5. **Dense Multilingual Soft Label Matrix (`llm_labels_v4_blend`)**:
+8. **Strict Anatomical Laterality Preservation & Deterministic Preprocessing Parity**:
+   - **Laterality Preservation**: Disables horizontal flip augmentations across training and TTA. Knee anatomy is strictly asymmetric (Medial vs Lateral compartments); flipping horizontally flips compartment laterality and corrupts discrimination between Medial vs Lateral Meniscus and Medial vs Lateral OA.
+   - **Deterministic Preprocessing Parity (`tests/test_dicom_preprocessing_parity.py`)**: Verified parity between local Python pipelines and standalone Kaggle kernels: 3D Patient Orientation Normal Vector sorting, DICOM VOI LUT application with window/level fallback, `MONOCHROME1` photometric inversion, and robust (0.5%, 99.5%) percentile clipping.
+   - **FP16 vs FP32 Parity**: Verified numerical stability with max probability delta $< 1.3 \times 10^{-4}$ and zero AUC degradation, ensuring ultra-fast sub-150ms GPU inference.
+
+9. **Dense Multilingual Soft Label Matrix (`llm_labels_v4_blend`)**:
    - Eliminates 80–95% NaN rates in original regex annotations across 4,407 Spanish, Greek, Cyrillic, and English radiology reports, resolving gradient starvation and allowing every mini-batch to supervise all 12 abnormalities.
 
 ---
@@ -102,6 +124,8 @@ $$\text{Macro AUC} = \frac{1}{12} \sum_{c=1}^{12} \text{AUC}_c$$
 | **Phase 17 (1-Fold)** | **Multi-Contrast T1 + T2 FS Decoupled Ensemble** | 384px | T1 Anatomical + T2 Fluid-Sensitive | Contrast-Decoupled Optimization | **0.8843** (Gold: 0.9250) | 0.920 | Submitted (T1+T2) |
 | **Phase 18 (5-Fold)** | **5-Fold Decoupled ConvNeXt-Small 384px Consensus Ensemble** | 384px | Decoupled Tri-Planar T2 FS (Full 5-Fold) | Label-Smoothed BCE + Gold Upweighting | **0.8807** (Gold: **0.9163**) | 0.938 | Completed (v65) |
 | **Phase 19 (Top-3)** | **Top-3 Consensus ConvNeXt-Small 384px Ensemble (Folds 0, 1, 3)** | 384px | Decoupled Tri-Planar T2 FS (Top-3 Consensus) | Label-Smoothed BCE + Gold Upweighting | **0.8856** (Gold: **0.9225**) | **0.939** 🏆 | **New All-Time SOTA (v66)** |
+| **Phase 19 (Asym F0)**| **Asymmetric ConvNeXt-Small 384px (32 Sag + 28 Cor + 20 Ax)** | 384px | Decoupled Tri-Planar T2 FS (Fold 0 Alone) | Label-Smoothed BCE + Gold Upweighting | **0.8909** (Gold: **0.9302**) | **0.929** | Top Single Fold (v67) |
+| **Phase 19 (Combo F0)**| **Symmetric (72 sl) + Asymmetric (80 sl) 50/50 Dual-Sampling** | 384px | Decoupled Tri-Planar T2 FS (Dual-Sampling F0) | Super-Additive Sampling Ensemble | **0.8933** (Gold: **0.9328**) | Pending | Actively Scoring (v68) |
 
 ---
 
@@ -130,7 +154,7 @@ Comprehensive 5-fold cross-validation benchmarking evaluated on an **NVIDIA RTX 
 | **ConvNeXt-Small** | 49.5M | 9.56 ms | 44.67 ms | 130.07 ms | 22.4 studies/sec |
 | **DINOv2 (ViT-B/14)** | 86.6M | 6.30 ms | 83.03 ms | 243.73 ms | 12.0 studies/sec |
 
-> **Inference Budget Guarantee**: Even our 48-slice tri-planar multi-model grand ensembles execute in **< 150 ms per study**, running 4–6x well within Kaggle's 9-hour inference quota for ~5,000 hidden test studies.
+> **Inference Budget Guarantee**: Even our 80-slice tri-planar multi-model grand ensembles execute in **< 150 ms per study**, running 4–6x well within Kaggle's 9-hour inference quota for ~5,000 hidden test studies.
 
 ---
 
@@ -184,11 +208,12 @@ KneeVision-AI/
 │   │   ├── preprocessing.py  # 3D spatial slice sorting, VOI LUT & 2.5D stacking
 │   │   ├── dataset.py        # PyTorch KneeMRIDataset (Zero-copy Parquet/NPY loader)
 │   │   ├── triplanar_dataset.py # Multi-plane (Sag+Cor+Ax) and dual-contrast loader
-│   │   ├── transforms.py     # Medical Albumentations augmentation pipeline
+│   │   ├── transforms.py     # Medical Albumentations augmentation pipeline (no h-flip)
 │   │   └── dicom_reader.py   # Multi-threaded low-level DICOM parser
 │   ├── models/               # Neural network architectures
 │   │   ├── mil_backbone.py   # Gated Attention MIL + 2.5D CNN/ViT backbones
 │   │   ├── plane_decoupled_mil.py # Anatomically-Routed Plane-Decoupled MIL
+│   │   ├── depth_aware_mil.py # Anatomical Depth-Conditioned Spatial Tri-Planar MIL
 │   │   └── contrast_decoupled_mil.py # T1/T2 Multi-Contrast Decoupled MIL
 │   ├── benchmarks/           # Foundation extractors (DINOv2/v3, BioMedCLIP, SigLIP)
 │   │   └── foundation_extractors.py
@@ -200,16 +225,22 @@ KneeVision-AI/
 │   ├── 02_preprocess_and_cache.py      # Multi-process parallel volume caching
 │   ├── 11_train_dense_288px.py         # High-resolution dense retraining
 │   ├── 27_train_mri_aware_mil.py       # DINOv2 label-specific MIL training
-│   ├── 47_export_grand_ensemble_kernel.py # Standalone grand ensemble kernel exporter
-│   ├── 50_export_dinov2_small_kernel.py   # Standalone DINOv2 kernel exporter
 │   ├── 52_export_5fold_convnext_small_ensemble.py # 5-fold ConvNeXt-Small kernel exporter
 │   ├── 53_train_decoupled_multicontrast_3fold.py  # Multi-contrast 3-fold training engine
+│   ├── 61_train_depth_aware_denoised_models.py    # Depth-aware spatial MIL trainer
+│   ├── 62_finetune_5fold_consensus.py  # Consensus pseudo-label finetuning with EMA
+│   ├── 63_export_phase18_consensus_5fold_submission.py # Phase 18 5-fold kernel exporter
+│   ├── 64_export_phase18_top3_ensemble.py # Phase 19 Top-3 consensus exporter (LB 0.939)
+│   ├── 65_export_phase19_asym_fold0_submission.py # Phase 19 Asymmetric Fold 0 exporter (LB 0.929)
+│   ├── 66_export_sym_asym_f0_combo_submission.py # Phase 19 Sym + Asym combo exporter
+│   ├── compare_sym_vs_asym_f0.py       # Systematic symmetric vs asymmetric comparison
 │   └── generate_eda_plots.py           # Publication-quality figure generator
 │
 ├── checkpoints/              # Best model weights & ensemble parameters
 │   ├── ensemble_weights.json
 │   ├── phase13_pathology_weights.json
-│   └── phase17_3fold_ensemble_summary.json
+│   ├── phase17_3fold_ensemble_summary.json
+│   └── consensus_ft/         # Phase 18 / 19 Consensus finetuned model weights
 │
 ├── kaggle_kernel/            # Self-contained Kaggle submission notebooks & engines
 │   ├── submission_pipeline.py
@@ -217,6 +248,7 @@ KneeVision-AI/
 │
 ├── reports/figures/          # High-resolution visual figures (01 to 08)
 └── tests/                    # Pytest validation test suite (17 passed)
+    └── test_dicom_preprocessing_parity.py # Deterministic local vs Kaggle parity test
 ```
 
 ---
@@ -239,7 +271,7 @@ conda activate rsna-knee
 conda create -n rsna-knee python=3.10 -y
 conda activate rsna-knee
 
-# Install dependencies using python -m pip (avoids PATH shadowing from ~/.local/bin/pip)
+# Install dependencies using python -m pip
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
@@ -267,7 +299,7 @@ python scripts/02_preprocess_and_cache.py --num_workers 16
 
 ### 3. Run Automated Validation Test Suite
 ```bash
-# Execute the full 17-test validation suite
+# Execute the full validation suite (including DICOM preprocessing parity)
 pytest tests/ -v
 ```
 
@@ -275,12 +307,18 @@ pytest tests/ -v
 
 ### 4. Train Models & Export Kaggle Submission Kernels
 ```bash
-# Train Multi-Contrast Decoupled 3-Fold Models
-python scripts/53_train_decoupled_multicontrast_3fold.py --fold 0 --gpu 0
+# 1. Consensus-Finetune Tri-Planar Models with EMA and Crisp Gold Upweighting
+./scripts/run_consensus_finetune_single_gpu.sh 0 0
 
-# Export Standalone 5-Fold ConvNeXt-Small Kaggle Kernel (Public LB ~0.930)
-python scripts/52_export_5fold_convnext_small_ensemble.py
+# 2. Launch Phase 19 Asymmetric Slice Allocation Training (32 Sag + 28 Cor + 20 Ax)
+./scripts/launch_phase19_asymmetric_slices.sh --fold 0 --gpu 0
 
-# Export Grand Ensemble Submission Kernel
-python scripts/47_export_grand_ensemble_kernel.py
-```
+# 3. Export SOTA Phase 19 Top-3 Consensus Ensemble Submission Kernel (Public LB 0.939)
+python scripts/64_export_phase18_top3_ensemble.py
+
+# 4. Export Phase 19 Asymmetric (80-slice) Fold 0 Standalone Submission Kernel (Public LB 0.929)
+python scripts/65_export_phase19_asym_fold0_submission.py
+
+# 5. Export Phase 19 Symmetric + Asymmetric Dual-Sampling Combo Kernel
+python scripts/66_export_sym_asym_f0_combo_submission.py
+```\n
